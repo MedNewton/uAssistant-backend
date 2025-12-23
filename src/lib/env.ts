@@ -28,7 +28,8 @@ const EnvSchema = z.object({
 
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
-  OPENAI_MODEL: z.string().optional().default("gpt-4.1-mini"),
+  OPENAI_MODEL: z.string().optional(),
+  SYSTEM_PROMPT: z.string().optional(),
 
   // Chain / RPC
   RPC_URL: z.string().url(),
@@ -76,6 +77,8 @@ const EnvSchema = z.object({
 
   USHARE_ID: Bytes32.optional(),
   USHARE_TOKEN: Address.optional(),
+
+  
 });
 
 export type Env = z.infer<typeof EnvSchema>;

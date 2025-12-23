@@ -1,36 +1,50 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify from "fastify";
+import type { FastifyLoggerOptions } from "fastify";
 import cors from "@fastify/cors";
+import type { LoggerOptions } from "pino";
+
 import { env } from "./lib/env";
+import { chatRoutes } from "./routes/chat";
 
-import { healthRoutes } from "./routes/health";
+const isDev = env.NODE_ENV !== "production";
 
-export function buildApp(): FastifyInstance {
-  const app = Fastify({
-    logger: true,
-  });
+// Important: pass logger OPTIONS (not pino() instance)
+const logger: FastifyLoggerOptions & LoggerOptions = isDev
+  ? {
+      level: "info",
+      transport: {
+        target: "pino-pretty",
+        options: {
+          translateTime: "SYS:standard",
+          ignore: "pid,hostname",
+        },
+      },
+    }
+  : {
+      level: "info",
+    };
 
-  app.register(cors, {
+async function main(): Promise<void> {
+  const app = Fastify({ logger });
+
+  await app.register(cors, {
     origin: env.CORS_ORIGIN ?? true,
     credentials: true,
   });
 
-  app.register(healthRoutes, { prefix: "/health" });
+  app.get("/health", async () => ({ ok: true }));
 
-  return app;
-}
-
-async function main(): Promise<void> {
-  const app = buildApp();
+  await app.register(chatRoutes, { prefix: "/chat" });
 
   const host = env.HOST ?? "0.0.0.0";
   const port = env.PORT ?? 8080;
 
-  try {
-    await app.listen({ host, port });
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
+  await app.listen({ host, port });
+  app.log.info(`Server listening on http://${host}:${port}`);
 }
 
-void main();
+main().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error(err);
+  process.exit(1);
+});
