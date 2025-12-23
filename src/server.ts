@@ -39,9 +39,21 @@ async function main(): Promise<void> {
   const app = Fastify({ logger });
 
   await app.register(cors, {
-    origin: env.CORS_ORIGIN ?? true,
+    origin: (origin, cb) => {
+      // Allow non-browser tools (curl/postman) that send no Origin
+      if (!origin) return cb(null, true);
+  
+      const allowList = (env.CORS_ORIGIN ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+  
+      const allowed = allowList.includes(origin);
+      cb(null, allowed);
+    },
     credentials: true,
   });
+  
 
   // Rate limit (global) — /health is allow-listed
   await app.register(rateLimit, {
