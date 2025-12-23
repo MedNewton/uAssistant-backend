@@ -1,14 +1,16 @@
 import Fastify from "fastify";
 import type { FastifyLoggerOptions } from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import type { LoggerOptions } from "pino";
+import crypto from "node:crypto";
 
 import { env } from "./lib/env";
 import { chatRoutes } from "./routes/chat";
 
 const isDev = env.NODE_ENV !== "production";
 
-// Important: pass logger OPTIONS (not pino() instance)
+// Important: pass logger OPTIONS (not a pino() instance)
 const logger: FastifyLoggerOptions & LoggerOptions = isDev
   ? {
       level: "info",
@@ -20,9 +22,18 @@ const logger: FastifyLoggerOptions & LoggerOptions = isDev
         },
       },
     }
-  : {
-      level: "info",
-    };
+  : { level: "info" };
+
+// API key used to protect /chat
+// Set this in Railway Variables as: UASSISTANT_API_KEY=your_secret_value
+const CHAT_API_KEY = (process.env.UASSISTANT_API_KEY ?? "").trim();
+
+function timingSafeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 async function main(): Promise<void> {
   const app = Fastify({ logger });
@@ -30,6 +41,46 @@ async function main(): Promise<void> {
   await app.register(cors, {
     origin: env.CORS_ORIGIN ?? true,
     credentials: true,
+  });
+
+  // Rate limit (global) — /health is allow-listed
+  await app.register(rateLimit, {
+    global: true,
+    max: 30, // 30 requests
+    timeWindow: "1 minute",
+    allowList: (req) => req.url === "/health",
+  });
+
+  // Auth gate only for /chat*
+  // Supports:
+  //  - Authorization: Bearer <key>
+  //  - x-api-key: <key>
+  app.addHook("onRequest", async (req, reply) => {
+    if (!req.url.startsWith("/chat")) return;
+
+    // If you forgot to set a key in Railway, do NOT lock yourself out in dev.
+    // In production you should always set UASSISTANT_API_KEY.
+    if (!CHAT_API_KEY) {
+      if (!isDev) {
+        req.log.error("UASSISTANT_API_KEY is missing in production.");
+        return reply.code(500).send({ error: "SERVER_MISCONFIGURED" });
+      }
+      return;
+    }
+
+    const xApiKey = req.headers["x-api-key"];
+    const auth = req.headers["authorization"];
+
+    const fromHeader =
+      typeof xApiKey === "string"
+        ? xApiKey
+        : typeof auth === "string" && auth.toLowerCase().startsWith("bearer ")
+          ? auth.slice(7).trim()
+          : "";
+
+    if (!fromHeader || !timingSafeEquals(fromHeader, CHAT_API_KEY)) {
+      return reply.code(401).send({ error: "UNAUTHORIZED" });
+    }
   });
 
   app.get("/health", async () => ({ ok: true }));
