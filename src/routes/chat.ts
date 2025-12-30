@@ -77,6 +77,21 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
     const model = env.OPENAI_MODEL ?? "gpt-4o-mini";
 
+    // ✅ Add CORS headers to the actual SSE response (because we hijack reply.raw)
+const origin = req.headers.origin;
+
+const allowList = (env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (typeof origin === "string" && allowList.includes(origin)) {
+  reply.raw.setHeader("Access-Control-Allow-Origin", origin);
+  reply.raw.setHeader("Vary", "Origin");
+  reply.raw.setHeader("Access-Control-Allow-Credentials", "true");
+}
+
+
     // Take over the raw response so Fastify doesn't auto-close it
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
