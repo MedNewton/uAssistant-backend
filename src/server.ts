@@ -42,23 +42,21 @@ async function main(): Promise<void> {
     origin: (origin, cb) => {
       // Allow non-browser tools (curl/postman) that send no Origin
       if (!origin) return cb(null, true);
-  
+
       const allowList = (env.CORS_ORIGIN ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-  
-      const allowed = allowList.includes(origin);
-      cb(null, allowed);
+
+      cb(null, allowList.includes(origin));
     },
     credentials: true,
   });
-  
 
   // Rate limit (global) — /health is allow-listed
   await app.register(rateLimit, {
     global: true,
-    max: 30, // 30 requests
+    max: 30,
     timeWindow: "1 minute",
     allowList: (req) => req.url === "/health",
   });
@@ -70,8 +68,10 @@ async function main(): Promise<void> {
   app.addHook("onRequest", async (req, reply) => {
     if (!req.url.startsWith("/chat")) return;
 
+    // ✅ allow CORS preflight through (no API key on OPTIONS)
+    if (req.method === "OPTIONS") return;
+
     // If you forgot to set a key in Railway, do NOT lock yourself out in dev.
-    // In production you should always set UASSISTANT_API_KEY.
     if (!CHAT_API_KEY) {
       if (!isDev) {
         req.log.error("UASSISTANT_API_KEY is missing in production.");
