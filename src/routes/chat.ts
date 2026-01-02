@@ -19,21 +19,35 @@ import GovernanceAbiJson from "../abi/Governance.json";
 /* ----------------------------- Env helpers (no env.ts changes) ----------------------------- */
 
 type EnvExtras = Readonly<{
-  URANO_DECIMALS?: number | string | undefined;
-  DOCS_URL?: string | undefined;
-  SUPPORT_EMAIL?: string | undefined;
+  URANO_DECIMALS?: number | string;
+  DOCS_URL?: string;
+  SUPPORT_EMAIL?: string;
 }>;
 
 function getEnvExtras(): EnvExtras {
-  // env is derived from process.env, but env.ts type may not include all keys.
-  // This cast avoids TS errors without modifying env.ts.
-  const e = env as unknown as Partial<EnvExtras>;
-  return {
-    URANO_DECIMALS: e.URANO_DECIMALS ?? process.env.URANO_DECIMALS,
-    DOCS_URL: e.DOCS_URL ?? process.env.DOCS_URL,
-    SUPPORT_EMAIL: e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL,
-  };
+  const e = env as unknown as Partial<Record<keyof EnvExtras, unknown>>;
+
+  const uranoDecimals = (e.URANO_DECIMALS ?? process.env.URANO_DECIMALS) as
+    | string
+    | number
+    | undefined;
+
+  const docsUrl = (e.DOCS_URL ?? process.env.DOCS_URL) as string | undefined;
+  const supportEmail = (e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL) as
+    | string
+    | undefined;
+
+  const out: { URANO_DECIMALS?: string | number; DOCS_URL?: string; SUPPORT_EMAIL?: string } =
+    {};
+
+  if (uranoDecimals !== undefined) out.URANO_DECIMALS = uranoDecimals;
+  if (docsUrl !== undefined && docsUrl.trim() !== "") out.DOCS_URL = docsUrl;
+  if (supportEmail !== undefined && supportEmail.trim() !== "")
+    out.SUPPORT_EMAIL = supportEmail;
+
+  return out;
 }
+
 
 function toPositiveInt(v: unknown, fallback: number): number {
   const n =
