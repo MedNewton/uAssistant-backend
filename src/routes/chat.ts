@@ -20,6 +20,7 @@ import GovernanceAbiJson from "../abi/Governance.json";
 
 type EnvExtras = Readonly<{
   URANO_DECIMALS?: number | string;
+  USHARE_DECIMALS?: number | string;
   DOCS_URL?: string;
   SUPPORT_EMAIL?: string;
 }>;
@@ -32,14 +33,24 @@ function getEnvExtras(): EnvExtras {
     | number
     | undefined;
 
+  const uShareDecimals = (e.USHARE_DECIMALS ?? process.env.USHARE_DECIMALS) as
+    | string
+    | number
+    | undefined;
+
   const docsUrl = (e.DOCS_URL ?? process.env.DOCS_URL) as string | undefined;
   const supportEmail = (e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL) as string | undefined;
 
-  // IMPORTANT (exactOptionalPropertyTypes):
-  // Never assign `undefined` to optional props; only set when we have a real value.
-  const out: { URANO_DECIMALS?: string | number; DOCS_URL?: string; SUPPORT_EMAIL?: string } = {};
+  // exactOptionalPropertyTypes-safe: only set when real values exist.
+  const out: {
+    URANO_DECIMALS?: string | number;
+    USHARE_DECIMALS?: string | number;
+    DOCS_URL?: string;
+    SUPPORT_EMAIL?: string;
+  } = {};
 
   if (uranoDecimals !== undefined) out.URANO_DECIMALS = uranoDecimals;
+  if (uShareDecimals !== undefined) out.USHARE_DECIMALS = uShareDecimals;
 
   if (docsUrl && docsUrl.trim() !== "") out.DOCS_URL = docsUrl;
   if (supportEmail && supportEmail.trim() !== "") out.SUPPORT_EMAIL = supportEmail;
@@ -72,13 +83,11 @@ const uShareFactoryAbi = extractAbi(UShareFactoryAbiJson);
 const vestingAbi = extractAbi(VestingAbiJson);
 const governanceAbi = extractAbi(GovernanceAbiJson);
 
-// Keeping for future work; harmless with your tsconfig.
 void uranoTokenAbi;
 void uShareFactoryAbi;
 
 /**
  * ERC20 approve fragment (used for USDC approvals).
- * Using a small fragment is intentional: stable and avoids relying on a specific token ABI file.
  */
 const erc20ApproveAbi = [
   {
@@ -111,7 +120,7 @@ const UintStringSchema = z.string().regex(/^\d+$/, "Expected an integer string")
 
 const VestingDataSchema = z.object({
   beneficiary: AddressSchema,
-  totalAmount: UintStringSchema, // MUST be uint256 string (wei)
+  totalAmount: UintStringSchema,
   cliffInSeconds: UintStringSchema,
   vestingInSeconds: UintStringSchema,
   tgePercentage: UintStringSchema,
@@ -161,12 +170,19 @@ const PlannedSchema = z.object({
   interpretation: z.string().min(1).max(300),
   userMessage: z.string().min(1).max(1200),
 
+  // Human amount (e.g. "120")
   amount: z.string().optional(),
+
+  // Keep for compatibility; we will treat this as uShareId if user provides bytes32.
   assetName: z.string().optional(),
+
+  // Preferred: explicit bytes32 uShareId
+  uShareId: Bytes32Schema.optional(),
+
   proposalId: z.number().int().nonnegative().optional(),
   vote: z.boolean().optional(),
 
-  warnings: z.array(z.string().min(1).max(200)).optional(),
+  warnings: z.array(z.string().min(1).max(300)).optional(),
   docsUrl: z.string().url().optional(),
   supportEmail: z.string().email().optional(),
 });
@@ -256,45 +272,59 @@ function helpMessage(): Planned {
     actionType: "QUESTION",
     interpretation: "Help / greeting",
     userMessage:
-      "Hi. I can help you stake/unstake (amount or all), buy/sell uShare, vote on proposals, or claim vesting tokens. What would you like to do?",
+      "Hi. I can help you stake/unstake (amount or all), buy uShare (requires a uShareId), vote on proposals, or claim vesting tokens. What would you like to do?",
     warnings: [],
   };
 }
 
 function extractFirstNumber(text: string): string | null {
-  // Captures 120, 120.5, 120,5
   const m = text.match(/(\d+(?:[.,]\d+)?)/);
   if (!m) return null;
   return m[1]!.replace(",", ".");
 }
 
-function coercePlanFromUserText(plan: Planned, last: string): Planned {
-  let out = plan;
-
-  const w = [...(out.warnings ?? [])];
-
-  // Default BUY asset
-  if (out.actionType === "BUY_USHARE") {
-    const asset =
-      out.assetName && out.assetName.trim().length > 0 ? out.assetName.trim() : "USDC";
-    if (asset !== out.assetName) out = { ...out, assetName: asset };
-  }
-
-  // Coerce amount for actions that require it
-  const needsAmount = out.actionType === "BUY_USHARE" || out.actionType === "STAKE" || out.actionType === "UNSTAKE";
-  if (needsAmount && (!out.amount || out.amount.trim() === "")) {
-    const inferred = extractFirstNumber(last);
-    if (inferred) {
-      out = { ...out, amount: inferred };
-    } else {
-      w.push("Missing amount. Example: 'buy 120 uShares with USDC'.");
-      out = { ...out, warnings: w };
-    }
-  }
-
-  return out;
+function extractBytes32(text: string): `0x${string}` | null {
+  const m = text.match(/0x[a-fA-F0-9]{64}/);
+  return (m ? (m[0] as `0x${string}`) : null);
 }
 
+/**
+ * Post-process the LLM plan so the UX is robust even if the model omits fields.
+ */
+function coercePlanFromUserText(plan: Planned, last: string): Planned {
+  let out = plan;
+  const w = [...(out.warnings ?? [])];
+
+  // Infer amount where required.
+  const needsAmount =
+    out.actionType === "BUY_USHARE" || out.actionType === "STAKE" || out.actionType === "UNSTAKE";
+
+  if (needsAmount && (!out.amount || out.amount.trim() === "")) {
+    const inferred = extractFirstNumber(last);
+    if (inferred) out = { ...out, amount: inferred };
+    else w.push("Missing amount. Example: 'buy 120 uShares <uShareId:0x...>'.");
+  }
+
+  // Infer uShareId for BUY_USHARE if user pasted it in chat.
+  if (out.actionType === "BUY_USHARE" && !out.uShareId) {
+    const inferredId = extractBytes32(last);
+    if (inferredId) out = { ...out, uShareId: inferredId };
+  }
+
+  // SELL is not supported by this uShareMarket ABI.
+  if (out.actionType === "SELL_USHARE") {
+    out = {
+      ...out,
+      actionType: "UNSUPPORTED",
+      interpretation: "Sell uShare is not supported by this contract",
+      userMessage:
+        "I can't do that yet. I can help you stake/unstake, buy uShare, vote, or claim vesting tokens.",
+    };
+  }
+
+  if (w.length > 0) out = { ...out, warnings: w };
+  return out;
+}
 
 /* ----------------------------- Planner (OpenAI -> JSON) ----------------------------- */
 
@@ -313,7 +343,7 @@ Return JSON with this exact shape:
   "interpretation": "short interpretation",
   "userMessage": "short user-facing message (what will happen or the answer)",
   "amount": "string like 100.5 (only when needed)",
-  "assetName": "string (only for BUY_USHARE/SELL_USHARE)",
+  "uShareId": "0x... (bytes32) required for BUY_USHARE",
   "proposalId": 123 (only for VOTE),
   "vote": true/false (only for VOTE),
   "warnings": ["..."] (optional),
@@ -326,15 +356,15 @@ Core rules:
 - General informational questions MUST be actionType="QUESTION" with a helpful answer.
 - Use actionType="UNSUPPORTED" ONLY when the user requests an action outside the supported set.
   For UNSUPPORTED, userMessage must be:
-  "I can't do that yet. I can help you stake/unstake, buy/sell uShare, vote, or claim vesting tokens."
+  "I can't do that yet. I can help you stake/unstake, buy uShare, vote, or claim vesting tokens."
 
 Action extraction rules:
 - STAKE / UNSTAKE: extract human amount into "amount". If missing, keep actionType and add warning.
 - STAKE_ALL / UNSTAKE_ALL: no amount.
-- BUY_USHARE: needs "amount". If assetName is missing, default it to "USDC".
-- SELL_USHARE: needs "assetName". If missing, keep SELL_USHARE and add warnings.
+- BUY_USHARE: requires "amount" AND "uShareId" (bytes32). If uShareId is missing, add a warning asking the user to paste it.
+- SELL_USHARE: if asked, mark UNSUPPORTED (this market ABI has no sell function).
 - VOTE: needs proposalId and vote. If missing, keep VOTE and add warnings.
-- CLAIM_VESTING: no params in JSON. (Backend needs Merkle proof + vesting data in request context to build tx.)
+- CLAIM_VESTING: no params in JSON.
 
 Keep interpretation concise. Keep userMessage under 1–3 short sentences.
 `.trim();
@@ -372,11 +402,11 @@ Keep interpretation concise. Keep userMessage under 1–3 short sentences.
 
 function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: string[] } {
   const warnings = [...(plan.warnings ?? [])];
-
   const extras = getEnvExtras();
 
   const chainId = Number(env.CHAIN_ID);
   const uranoDecimals = toPositiveInt(extras.URANO_DECIMALS, 18);
+  const uShareDecimals = toPositiveInt(extras.USHARE_DECIMALS, 18);
 
   const STAKING = asAddress(env.URANO_STAKING, "URANO_STAKING");
   const GOV = asAddress(env.URANO_GOVERNANCE, "URANO_GOVERNANCE");
@@ -452,11 +482,19 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
         return { txs: [], warnings: [...warnings, "Missing amount."] };
       }
 
-      // Your requirement: if assetName is missing, default it to USDC.
-      const assetName =
-        plan.assetName && plan.assetName.trim().length > 0 ? plan.assetName.trim() : "USDC";
+      const uShareId = plan.uShareId;
+      if (!uShareId) {
+        return {
+          txs: [],
+          warnings: [
+            ...warnings,
+            "Missing uShareId (bytes32). Paste it like: 0x<64 hex chars>.",
+          ],
+        };
+      }
 
-      const amt = parseUnits(normalizeAmountString(plan.amount), 18);
+      // amount is uShare amount (not USDC). Decimals can vary; default 18, override with USHARE_DECIMALS env.
+      const amt = parseUnits(normalizeAmountString(plan.amount), uShareDecimals);
 
       // Tx1: Approve USDC spending for the market (approve-once UX)
       const approveData = encodeFunctionData({
@@ -465,11 +503,11 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
         args: [MARKET, MAX_UINT256],
       });
 
-      // Tx2: Buy
+      // Tx2: Buy (NOTE: correct function name is "buyuShare")
       const buyData = encodeFunctionData({
         abi: uShareMarketAbi,
-        functionName: "buyUshare",
-        args: [assetName, amt],
+        functionName: "buyuShare",
+        args: [uShareId, amt],
       });
 
       warnings.push(
@@ -483,18 +521,6 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
         ],
         warnings,
       };
-    }
-
-    case "SELL_USHARE": {
-      if (!plan.assetName) return { txs: [], warnings: [...warnings, "Missing uShare name."] };
-
-      const data = encodeFunctionData({
-        abi: uShareMarketAbi,
-        functionName: "sellUshare",
-        args: [plan.assetName],
-      });
-
-      return { txs: [{ chainId, to: MARKET, data, value: value.toString() }], warnings };
     }
 
     case "CLAIM_VESTING": {
@@ -548,7 +574,6 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
 
 function makeOut(plan: Planned, txs: TxPreview[], warnings: string[]): AssistantPlan {
   const id = crypto.randomUUID();
-
   const extras = getEnvExtras();
 
   const docsUrl = plan.docsUrl ?? extras.DOCS_URL;
@@ -600,6 +625,7 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(out);
   });
 
+  // Stream (SSE): emits ready -> plan -> done
   app.post("/stream", async (req, reply) => {
     const parsed = ChatBodySchema.safeParse(req.body);
     if (!parsed.success) {
