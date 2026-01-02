@@ -2,12 +2,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import crypto from "node:crypto";
-import {
-  encodeFunctionData,
-  parseUnits,
-  type Address,
-  type Abi,
-} from "viem";
+import { encodeFunctionData, parseUnits, type Address, type Abi } from "viem";
 
 import { openai } from "../lib/openai";
 import { env } from "../lib/env";
@@ -21,6 +16,36 @@ import UShareFactoryAbiJson from "../abi/uShareFactory.json";
 import VestingAbiJson from "../abi/Vesting.json";
 import GovernanceAbiJson from "../abi/Governance.json";
 
+/* ----------------------------- Env helpers (no env.ts changes) ----------------------------- */
+
+type EnvExtras = Readonly<{
+  URANO_DECIMALS?: number | string | undefined;
+  DOCS_URL?: string | undefined;
+  SUPPORT_EMAIL?: string | undefined;
+}>;
+
+function getEnvExtras(): EnvExtras {
+  // env is derived from process.env, but env.ts type may not include all keys.
+  // This cast avoids TS errors without modifying env.ts.
+  const e = env as unknown as Partial<EnvExtras>;
+  return {
+    URANO_DECIMALS: e.URANO_DECIMALS ?? process.env.URANO_DECIMALS,
+    DOCS_URL: e.DOCS_URL ?? process.env.DOCS_URL,
+    SUPPORT_EMAIL: e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL,
+  };
+}
+
+function toPositiveInt(v: unknown, fallback: number): number {
+  const n =
+    typeof v === "number"
+      ? v
+      : typeof v === "string"
+        ? Number(v.trim())
+        : NaN;
+
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 /* ----------------------------- ABI Loader ----------------------------- */
 
 function extractAbi(json: unknown): Abi {
@@ -28,8 +53,6 @@ function extractAbi(json: unknown): Abi {
   return (j?.abi ?? j) as Abi;
 }
 
-// Keep these in case you want to add approve() steps later.
-// (Not all are used right now; they’re loaded to ensure ABI drift cannot happen.)
 const uranoTokenAbi = extractAbi(UranoTokenAbiJson);
 const stakingAbi = extractAbi(StakingAbiJson);
 const uShareMarketAbi = extractAbi(UShareMarketAbiJson);
@@ -37,9 +60,29 @@ const uShareFactoryAbi = extractAbi(UShareFactoryAbiJson);
 const vestingAbi = extractAbi(VestingAbiJson);
 const governanceAbi = extractAbi(GovernanceAbiJson);
 
-// Avoid TS “declared but never used” for the ones we’ll use later.
+// NoUnusedLocals is not enabled in your tsconfig, so this is optional.
+// Keeping it anyway to make intent explicit for future work.
 void uranoTokenAbi;
 void uShareFactoryAbi;
+
+/**
+ * ERC20 approve fragment (used for USDC approvals).
+ * Using a small fragment is intentional: stable and avoids relying on a specific token ABI file.
+ */
+const erc20ApproveAbi = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+const MAX_UINT256 = (1n << 256n) - 1n;
 
 /* ----------------------------- Schemas ----------------------------- */
 
@@ -53,9 +96,7 @@ const Bytes32Schema = z
   .regex(/^0x[a-fA-F0-9]{64}$/, "Invalid bytes32")
   .transform((s) => s as `0x${string}`);
 
-const UintStringSchema = z
-  .string()
-  .regex(/^\d+$/, "Expected an integer string");
+const UintStringSchema = z.string().regex(/^\d+$/, "Expected an integer string");
 
 const VestingDataSchema = z.object({
   beneficiary: AddressSchema,
@@ -294,15 +335,16 @@ Keep interpretation concise. Keep userMessage under 1–3 short sentences.
 function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: string[] } {
   const warnings = [...(plan.warnings ?? [])];
 
-  const chainId = Number(env.CHAIN_ID ?? 421614);
+  const extras = getEnvExtras();
 
-  // Keep URANO decimals configurable without requiring env schema changes.
-  const uranoDecimals = Number((process.env.URANO_DECIMALS ?? "18").trim());
+  const chainId = Number(env.CHAIN_ID);
+  const uranoDecimals = toPositiveInt(extras.URANO_DECIMALS, 18);
 
   const STAKING = asAddress(env.URANO_STAKING, "URANO_STAKING");
   const GOV = asAddress(env.URANO_GOVERNANCE, "URANO_GOVERNANCE");
   const MARKET = asAddress(env.USHARE_MARKET, "USHARE_MARKET");
   const VESTING = asAddress(env.VESTING_ADDRESS, "VESTING_ADDRESS");
+  const USDC = asAddress(env.USDC, "USDC");
 
   const value = 0n;
 
@@ -372,18 +414,33 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
         return { txs: [], warnings: [...warnings, "Missing uShare name or amount."] };
       }
 
-      warnings.push("Buying may require token approval before this tx can succeed.");
-
-      // If your uShare token uses a different decimals value, adjust later.
       const amt = parseUnits(normalizeAmountString(plan.amount), 18);
 
-      const data = encodeFunctionData({
+      // Tx1: Approve USDC spending for the market (approve-once UX)
+      const approveData = encodeFunctionData({
+        abi: erc20ApproveAbi,
+        functionName: "approve",
+        args: [MARKET, MAX_UINT256],
+      });
+
+      // Tx2: Buy
+      const buyData = encodeFunctionData({
         abi: uShareMarketAbi,
         functionName: "buyUshare",
         args: [plan.assetName, amt],
       });
 
-      return { txs: [{ chainId, to: MARKET, data, value: value.toString() }], warnings };
+      warnings.push(
+        "This action returns 2 transactions: (1) USDC approval to the market, then (2) buy. If you already approved USDC for this market, you can skip tx #1."
+      );
+
+      return {
+        txs: [
+          { chainId, to: USDC, data: approveData, value: value.toString() },
+          { chainId, to: MARKET, data: buyData, value: value.toString() },
+        ],
+        warnings,
+      };
     }
 
     case "SELL_USHARE": {
@@ -403,26 +460,23 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
       const vest = body.context?.vesting;
 
       if (!account) {
-        return { txs: [], warnings: [...warnings, "To claim vesting, I need your connected account (context.account)."] };
+        return {
+          txs: [],
+          warnings: [...warnings, "To claim vesting, I need your connected account (context.account)."],
+        };
       }
 
       if (!vest) {
         return {
           txs: [],
-          warnings: [
-            ...warnings,
-            "To claim vesting, I need your vesting record + Merkle proof (context.vesting).",
-          ],
+          warnings: [...warnings, "To claim vesting, I need your vesting record + Merkle proof (context.vesting)."],
         };
       }
 
       if (account.toLowerCase() !== vest.data.beneficiary.toLowerCase()) {
         return {
           txs: [],
-          warnings: [
-            ...warnings,
-            "Vesting claim blocked: connected account does not match the vesting beneficiary.",
-          ],
+          warnings: [...warnings, "Vesting claim blocked: connected account does not match the vesting beneficiary."],
         };
       }
 
@@ -453,12 +507,10 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
 function makeOut(plan: Planned, txs: TxPreview[], warnings: string[]): AssistantPlan {
   const id = crypto.randomUUID();
 
-  // Keep these optional without requiring env schema changes:
-  const fallbackDocsUrl = process.env.DOCS_URL || undefined;
-  const fallbackSupportEmail = process.env.SUPPORT_EMAIL || undefined;
+  const extras = getEnvExtras();
 
-  const docsUrl = plan.docsUrl ?? fallbackDocsUrl;
-  const supportEmail = plan.supportEmail ?? fallbackSupportEmail;
+  const docsUrl = plan.docsUrl ?? extras.DOCS_URL ?? undefined;
+  const supportEmail = plan.supportEmail ?? extras.SUPPORT_EMAIL ?? undefined;
 
   const tx: TxPreview | null = txs.length > 0 ? txs[0]! : null;
 
@@ -514,10 +566,7 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const origin = req.headers.origin;
-
-    // Support both your new env key and your older env file key.
-    const allowListStr = env.CORS_ORIGIN ?? process.env.CORS_ORIGINS ?? "";
-    const allowList = allowListStr
+    const allowList = (env.CORS_ORIGIN ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
@@ -586,7 +635,6 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
       const out = makeOut(plan, txs, warnings);
 
-      // Single source of truth for UI:
       reply.raw.write(sseEvent("plan", out));
       reply.raw.write(sseEvent("done", { ok: true }));
       cleanup();
