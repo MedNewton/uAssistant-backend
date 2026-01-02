@@ -1,3 +1,4 @@
+// src/lib/env.ts
 import "dotenv/config";
 import { z } from "zod";
 
@@ -29,11 +30,15 @@ const EnvSchema = z.object({
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
   OPENAI_MODEL: z.string().optional(),
-  SYSTEM_PROMPT: z.string().optional(),
+  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().optional(),
 
-  // Chain / RPC
+  // Prompt (support both keys; we normalize below)
+  SYSTEM_PROMPT: z.string().optional(),
+  ASSISTANT_SYSTEM_PROMPT: z.string().optional(),
+
+  // Chain / RPC (Arbitrum Sepolia default)
   RPC_URL: z.string().url(),
-  CHAIN_ID: z.coerce.number().int().positive().optional().default(84532),
+  CHAIN_ID: z.coerce.number().int().positive().optional().default(421614),
 
   /**
    * Optional server key (ONLY if you later decide the backend should sign txs).
@@ -45,7 +50,7 @@ const EnvSchema = z.object({
   ADMIN_ADDRESS: Address.optional(),
   OWNER: Address.optional(),
 
-  // tokens / contracts (Base Sepolia)
+  // tokens / contracts
   CIRCLE_USDC: Address.optional(),
   MOCK_USDC: Address.optional(),
   USDC: Address.optional(),
@@ -78,7 +83,14 @@ const EnvSchema = z.object({
   USHARE_ID: Bytes32.optional(),
   USHARE_TOKEN: Address.optional(),
 
-  
+  // extra config used by planner/tx builder
+  URANO_DECIMALS: z.coerce.number().int().positive().max(255).optional(),
+  USHARE_DECIMALS: z.coerce.number().int().positive().max(255).optional(),
+  DOCS_URL: z.string().optional(),
+  SUPPORT_EMAIL: z.string().optional(),
+
+  // uShare registry config
+  USHARE_OFFERINGS_JSON: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -91,5 +103,13 @@ export const env: Env = (() => {
       .join("\n");
     throw new Error(`Invalid environment variables:\n${msg}`);
   }
-  return parsed.data;
+
+  const data = parsed.data;
+
+  // Normalize prompt: if SYSTEM_PROMPT is missing, fall back to ASSISTANT_SYSTEM_PROMPT.
+  if (!data.SYSTEM_PROMPT && data.ASSISTANT_SYSTEM_PROMPT) {
+    return { ...data, SYSTEM_PROMPT: data.ASSISTANT_SYSTEM_PROMPT };
+  }
+
+  return data;
 })();
