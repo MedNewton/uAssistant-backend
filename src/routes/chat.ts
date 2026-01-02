@@ -1,3 +1,4 @@
+// src/routes/chat.ts
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import crypto from "node:crypto";
@@ -5,8 +6,6 @@ import { encodeFunctionData, parseUnits, type Address } from "viem";
 
 import { openai } from "../lib/openai";
 import { env } from "../lib/env";
-
-// Use NON-streaming type for the planner call (JSON)
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 
 /* ----------------------------- Schemas ----------------------------- */
@@ -43,8 +42,8 @@ const PlannedSchema = z.object({
   interpretation: z.string().min(1).max(300),
   userMessage: z.string().min(1).max(1200),
 
-  amount: z.string().optional(), // human amount, e.g. "100.5"
-  assetName: z.string().optional(), // uShare name for buy/sell
+  amount: z.string().optional(),
+  assetName: z.string().optional(),
   proposalId: z.number().int().nonnegative().optional(),
   vote: z.boolean().optional(),
 
@@ -89,6 +88,60 @@ function asAddress(v: string | undefined, name: string): Address {
     throw new Error(`Missing/invalid ${name} address env var`);
   }
   return s as Address;
+}
+
+function lastUserMessage(body: ChatBody): string {
+  for (let i = body.messages.length - 1; i >= 0; i -= 1) {
+    const m = body.messages[i];
+    if (m?.role === "user") return m.content.trim();
+  }
+  return body.messages[body.messages.length - 1]?.content?.trim() ?? "";
+}
+
+function isSmallTalkOrHelp(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+
+  // quick small-talk buckets
+  const exact = new Set([
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "gm",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "thanks",
+    "thank you",
+    "thx",
+    "ty",
+    "salut",
+    "bonjour",
+    "salam",
+    "slm",
+    "help",
+    "what can you do",
+    "who are you",
+  ]);
+
+  if (exact.has(t)) return true;
+
+  // short greeting-like messages
+  if (t.length <= 12 && /^(hi|hey|hello|gm|yo|salut|bonjour|salam|slm)\b/.test(t)) return true;
+  if (/^(thanks|thank you|thx|ty)\b/.test(t)) return true;
+
+  return false;
+}
+
+function helpMessage(): Planned {
+  return {
+    actionType: "QUESTION",
+    interpretation: "Help / greeting",
+    userMessage:
+      "Hi. I can help you stake/unstake (amount or all), buy/sell uShare, vote on proposals, or claim unlocked tokens. What would you like to do?",
+    warnings: [],
+  };
 }
 
 /* ----------------------------- Minimal ABIs ----------------------------- */
@@ -170,48 +223,46 @@ const vestingAbi = [
 /* ----------------------------- Planner (OpenAI -> JSON) ----------------------------- */
 
 async function planFromMessages(body: ChatBody): Promise<Planned> {
+  // HARD GUARANTEE: greetings/small-talk never go through the model
+  const last = lastUserMessage(body);
+  if (isSmallTalkOrHelp(last)) return helpMessage();
+
   const systemPrompt = `
-  You are uAssistant for the Urano DApp.
-  
-  You MUST NOT behave like a generic chatbot.
-  You MUST ONLY output JSON (no markdown, no prose outside JSON).
-  
-  Return JSON with this exact shape:
-  {
-    "actionType": "STAKE|UNSTAKE|STAKE_ALL|UNSTAKE_ALL|BUY_USHARE|SELL_USHARE|VOTE|CLAIM_UNLOCKED|QUESTION|UNSUPPORTED",
-    "interpretation": "short interpretation",
-    "userMessage": "short user-facing message (what will happen or the answer)",
-    "amount": "string like 100.5 (only when needed)",
-    "assetName": "string (only for BUY_USHARE/SELL_USHARE)",
-    "proposalId": 123 (only for VOTE),
-    "vote": true/false (only for VOTE),
-    "warnings": ["..."] (optional),
-    "docsUrl": "https://..." (optional),
-    "supportEmail": "email@..." (optional)
-  }
-  
-  Core rules:
-  - Greetings / small talk MUST be actionType="QUESTION".
-    Examples: "hi", "hello", "gm", "thanks", "who are you", "help", "what can you do".
-    For these, set userMessage to a friendly, concise response AND list supported actions:
-    stake/unstake (amount or all), buy/sell uShare, vote, claim unlocked.
-  - General informational questions about Urano / the DApp MUST be actionType="QUESTION" with a helpful answer in userMessage.
-  - Use actionType="UNSUPPORTED" ONLY when the user requests an action outside the supported set
-    (e.g., swap, bridge, send ETH, deploy contract, change admin, etc.).
-    For UNSUPPORTED, userMessage must be: "I can't do that yet. I can help you stake/unstake, buy/sell uShare, vote, or claim unlocked tokens."
-  
-  Action extraction rules:
-  - STAKE / UNSTAKE: extract human amount (not wei) into "amount".
-    If amount is missing, keep actionType as STAKE/UNSTAKE and add a warning like "Missing amount."
-  - STAKE_ALL / UNSTAKE_ALL: no amount.
-  - BUY_USHARE: needs "assetName" and "amount". If missing, keep BUY_USHARE and add warnings.
-  - SELL_USHARE: needs "assetName". If missing, keep SELL_USHARE and add warnings.
-  - VOTE: needs proposalId and vote (true=yes/approve, false=no/reject). If missing, keep VOTE and add warnings.
-  - CLAIM_UNLOCKED: no params.
-  
-  Keep interpretation concise. Keep userMessage under 1–3 short sentences.
-  `.trim();
-  
+You are uAssistant for the Urano DApp.
+
+You MUST ONLY output JSON (no markdown, no prose outside JSON).
+
+Return JSON with this exact shape:
+{
+  "actionType": "STAKE|UNSTAKE|STAKE_ALL|UNSTAKE_ALL|BUY_USHARE|SELL_USHARE|VOTE|CLAIM_UNLOCKED|QUESTION|UNSUPPORTED",
+  "interpretation": "short interpretation",
+  "userMessage": "short user-facing message (what will happen or the answer)",
+  "amount": "string like 100.5 (only when needed)",
+  "assetName": "string (only for BUY_USHARE/SELL_USHARE)",
+  "proposalId": 123 (only for VOTE),
+  "vote": true/false (only for VOTE),
+  "warnings": ["..."] (optional),
+  "docsUrl": "https://..." (optional),
+  "supportEmail": "email@..." (optional)
+}
+
+Core rules:
+- Greetings / small talk MUST be actionType="QUESTION".
+- General informational questions MUST be actionType="QUESTION" with a helpful answer.
+- Use actionType="UNSUPPORTED" ONLY when the user requests an action outside the supported set.
+  For UNSUPPORTED, userMessage must be:
+  "I can't do that yet. I can help you stake/unstake, buy/sell uShare, vote, or claim unlocked tokens."
+
+Action extraction rules:
+- STAKE / UNSTAKE: extract human amount (not wei) into "amount". If missing, keep actionType and add warning.
+- STAKE_ALL / UNSTAKE_ALL: no amount.
+- BUY_USHARE: needs "assetName" and "amount". If missing, keep BUY_USHARE and add warnings.
+- SELL_USHARE: needs "assetName". If missing, keep SELL_USHARE and add warnings.
+- VOTE: needs proposalId and vote. If missing, keep VOTE and add warnings.
+- CLAIM_UNLOCKED: no params.
+
+Keep interpretation concise. Keep userMessage under 1–3 short sentences.
+`.trim();
 
   const model = env.OPENAI_MODEL ?? "gpt-4o-mini";
 
@@ -222,32 +273,29 @@ async function planFromMessages(body: ChatBody): Promise<Planned> {
     messages: [{ role: "system", content: systemPrompt }, ...body.messages],
   };
 
-  const completion = await openai.chat.completions.create(reqBody);
-  const raw = completion.choices?.[0]?.message?.content ?? "{}";
-
-  let json: unknown;
   try {
-    json = JSON.parse(raw);
+    const completion = await openai.chat.completions.create(reqBody);
+    const raw = completion.choices?.[0]?.message?.content ?? "{}";
+
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      // NEVER return "Command not yet available" for parse issues
+      return helpMessage();
+    }
+
+    const parsed = PlannedSchema.safeParse(json);
+    if (!parsed.success) {
+      // NEVER return "Command not yet available" for schema issues
+      return helpMessage();
+    }
+
+    return parsed.data;
   } catch {
-    json = {
-      actionType: "UNSUPPORTED",
-      interpretation: "Invalid model output",
-      userMessage: "Command not yet available",
-      warnings: [],
-    };
+    // Network/API errors: still return helpful QUESTION message
+    return helpMessage();
   }
-
-  const parsed = PlannedSchema.safeParse(json);
-  if (!parsed.success) {
-    return {
-      actionType: "UNSUPPORTED",
-      interpretation: "Could not parse command",
-      userMessage: "Command not yet available",
-      warnings: [],
-    };
-  }
-
-  return parsed.data;
 }
 
 /* ----------------------------- TX Builder ----------------------------- */
@@ -255,7 +303,6 @@ async function planFromMessages(body: ChatBody): Promise<Planned> {
 function buildTx(plan: Planned): { tx: TxPreview | null; warnings: string[] } {
   const warnings = [...(plan.warnings ?? [])];
 
-  // Defaults (safe)
   const chainId = Number((process.env.CHAIN_ID ?? "84532").trim()); // Base Sepolia default
   const uranoDecimals = Number((process.env.URANO_DECIMALS ?? "18").trim());
 
@@ -333,9 +380,6 @@ function buildTx(plan: Planned): { tx: TxPreview | null; warnings: string[] } {
 
 function makeOut(plan: Planned, tx: TxPreview | null, warnings: string[]): AssistantPlan {
   const id = crypto.randomUUID();
-
-  // IMPORTANT for exactOptionalPropertyTypes:
-  // Only include docsUrl/supportEmail keys if they are defined.
   const docsUrl = plan.docsUrl ?? (process.env.DOCS_URL || undefined);
   const supportEmail = plan.supportEmail ?? (process.env.SUPPORT_EMAIL || undefined);
 
@@ -358,7 +402,6 @@ function makeOut(plan: Planned, tx: TxPreview | null, warnings: string[]): Assis
 /* ----------------------------- Routes ----------------------------- */
 
 export const chatRoutes: FastifyPluginAsync = async (app) => {
-  // Non-stream: returns plan + tx preview (NOT generic chat)
   app.post("/", async (req, reply) => {
     const parsed = ChatBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -383,14 +426,13 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(out);
   });
 
-  // Stream (SSE): emits ready -> plan -> delta(userMessage) -> done
+  // Stream (SSE): emits ready -> plan -> done
   app.post("/stream", async (req, reply) => {
     const parsed = ChatBodySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "BAD_REQUEST", issues: parsed.error.issues });
     }
 
-    // If you hijack, you must set CORS headers manually for SSE
     const origin = req.headers.origin;
     const allowList = (env.CORS_ORIGIN ?? "")
       .split(",")
@@ -445,7 +487,6 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       reply.raw.write(sseEvent("ready", { ok: true, id: reqId }));
 
-      // Build plan (JSON) then tx preview
       const plan = await planFromMessages(parsed.data);
 
       let tx: TxPreview | null = null;
@@ -462,11 +503,8 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
       const out = makeOut(plan, tx, warnings);
 
-      // Main structured event for UI
+      // Single source of truth for UI:
       reply.raw.write(sseEvent("plan", out));
-
-      // Optional compatibility: keep your existing UI that listens to "delta"
-      reply.raw.write(sseEvent("delta", { delta: out.userMessage }));
 
       reply.raw.write(sseEvent("done", { ok: true }));
       cleanup();
