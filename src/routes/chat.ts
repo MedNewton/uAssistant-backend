@@ -2,13 +2,68 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import crypto from "node:crypto";
-import { encodeFunctionData, parseUnits, type Address } from "viem";
+import {
+  encodeFunctionData,
+  parseUnits,
+  type Address,
+  type Abi,
+} from "viem";
 
 import { openai } from "../lib/openai";
 import { env } from "../lib/env";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 
+// ABI JSONs (from explorer)
+import UranoTokenAbiJson from "../abi/UranoToken.json";
+import StakingAbiJson from "../abi/Staking.json";
+import UShareMarketAbiJson from "../abi/uShareMarket.json";
+import UShareFactoryAbiJson from "../abi/uShareFactory.json";
+import VestingAbiJson from "../abi/Vesting.json";
+import GovernanceAbiJson from "../abi/Governance.json";
+
+/* ----------------------------- ABI Loader ----------------------------- */
+
+function extractAbi(json: unknown): Abi {
+  const j = json as any;
+  return (j?.abi ?? j) as Abi;
+}
+
+// Keep these in case you want to add approve() steps later.
+// (Not all are used right now; they’re loaded to ensure ABI drift cannot happen.)
+const uranoTokenAbi = extractAbi(UranoTokenAbiJson);
+const stakingAbi = extractAbi(StakingAbiJson);
+const uShareMarketAbi = extractAbi(UShareMarketAbiJson);
+const uShareFactoryAbi = extractAbi(UShareFactoryAbiJson);
+const vestingAbi = extractAbi(VestingAbiJson);
+const governanceAbi = extractAbi(GovernanceAbiJson);
+
+// Avoid TS “declared but never used” for the ones we’ll use later.
+void uranoTokenAbi;
+void uShareFactoryAbi;
+
 /* ----------------------------- Schemas ----------------------------- */
+
+const AddressSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid EVM address")
+  .transform((s) => s as Address);
+
+const Bytes32Schema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{64}$/, "Invalid bytes32")
+  .transform((s) => s as `0x${string}`);
+
+const UintStringSchema = z
+  .string()
+  .regex(/^\d+$/, "Expected an integer string");
+
+const VestingDataSchema = z.object({
+  beneficiary: AddressSchema,
+  totalAmount: UintStringSchema, // MUST be uint256 string (wei)
+  cliffInSeconds: UintStringSchema,
+  vestingInSeconds: UintStringSchema,
+  tgePercentage: UintStringSchema,
+});
 
 const ChatBodySchema = z.object({
   messages: z
@@ -20,6 +75,21 @@ const ChatBodySchema = z.object({
     )
     .min(1)
     .max(50),
+
+  // Optional context for smarter tx planning
+  context: z
+    .object({
+      account: AddressSchema.optional(),
+
+      // Merkle vesting claim tx generation
+      vesting: z
+        .object({
+          data: VestingDataSchema,
+          merkleProof: z.array(Bytes32Schema).max(64),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 type ChatBody = z.infer<typeof ChatBodySchema>;
@@ -32,7 +102,7 @@ const ActionTypeSchema = z.enum([
   "BUY_USHARE",
   "SELL_USHARE",
   "VOTE",
-  "CLAIM_UNLOCKED",
+  "CLAIM_VESTING",
   "QUESTION",
   "UNSUPPORTED",
 ]);
@@ -42,7 +112,7 @@ const PlannedSchema = z.object({
   interpretation: z.string().min(1).max(300),
   userMessage: z.string().min(1).max(1200),
 
-  amount: z.string().optional(),
+  amount: z.string().optional(), // human amount (e.g. "100.5") for stake/buy
   assetName: z.string().optional(),
   proposalId: z.number().int().nonnegative().optional(),
   vote: z.boolean().optional(),
@@ -67,7 +137,13 @@ type AssistantPlan = Readonly<{
   interpretation: string;
   userMessage: string;
   warnings: string[];
+
+  // preferred (multi-step capable)
+  txs: TxPreview[];
+
+  // backwards compatibility
   tx: TxPreview | null;
+
   docsUrl?: string;
   supportEmail?: string;
 }>;
@@ -102,7 +178,6 @@ function isSmallTalkOrHelp(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (!t) return false;
 
-  // quick small-talk buckets
   const exact = new Set([
     "hi",
     "hello",
@@ -126,8 +201,6 @@ function isSmallTalkOrHelp(text: string): boolean {
   ]);
 
   if (exact.has(t)) return true;
-
-  // short greeting-like messages
   if (t.length <= 12 && /^(hi|hey|hello|gm|yo|salut|bonjour|salam|slm)\b/.test(t)) return true;
   if (/^(thanks|thank you|thx|ty)\b/.test(t)) return true;
 
@@ -139,91 +212,14 @@ function helpMessage(): Planned {
     actionType: "QUESTION",
     interpretation: "Help / greeting",
     userMessage:
-      "Hi. I can help you stake/unstake (amount or all), buy/sell uShare, vote on proposals, or claim unlocked tokens. What would you like to do?",
+      "Hi. I can help you stake/unstake (amount or all), buy/sell uShare, vote on proposals, or claim vesting tokens. What would you like to do?",
     warnings: [],
   };
 }
 
-/* ----------------------------- Minimal ABIs ----------------------------- */
-
-const stakingAbi = [
-  {
-    type: "function",
-    name: "stake",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "unstake",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "amount", type: "uint256" }],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "stakeAll",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "unstakeAll",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-] as const;
-
-const governanceAbi = [
-  {
-    type: "function",
-    name: "vote",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "proposalId", type: "uint256" },
-      { name: "support", type: "bool" },
-    ],
-    outputs: [],
-  },
-] as const;
-
-const uShareMarketAbi = [
-  {
-    type: "function",
-    name: "buyUshare",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "name", type: "string" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "sellUshare",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "name", type: "string" }],
-    outputs: [],
-  },
-] as const;
-
-const vestingAbi = [
-  {
-    type: "function",
-    name: "claimUnlocked",
-    stateMutability: "nonpayable",
-    inputs: [],
-    outputs: [],
-  },
-] as const;
-
 /* ----------------------------- Planner (OpenAI -> JSON) ----------------------------- */
 
 async function planFromMessages(body: ChatBody): Promise<Planned> {
-  // HARD GUARANTEE: greetings/small-talk never go through the model
   const last = lastUserMessage(body);
   if (isSmallTalkOrHelp(last)) return helpMessage();
 
@@ -234,7 +230,7 @@ You MUST ONLY output JSON (no markdown, no prose outside JSON).
 
 Return JSON with this exact shape:
 {
-  "actionType": "STAKE|UNSTAKE|STAKE_ALL|UNSTAKE_ALL|BUY_USHARE|SELL_USHARE|VOTE|CLAIM_UNLOCKED|QUESTION|UNSUPPORTED",
+  "actionType": "STAKE|UNSTAKE|STAKE_ALL|UNSTAKE_ALL|BUY_USHARE|SELL_USHARE|VOTE|CLAIM_VESTING|QUESTION|UNSUPPORTED",
   "interpretation": "short interpretation",
   "userMessage": "short user-facing message (what will happen or the answer)",
   "amount": "string like 100.5 (only when needed)",
@@ -251,20 +247,20 @@ Core rules:
 - General informational questions MUST be actionType="QUESTION" with a helpful answer.
 - Use actionType="UNSUPPORTED" ONLY when the user requests an action outside the supported set.
   For UNSUPPORTED, userMessage must be:
-  "I can't do that yet. I can help you stake/unstake, buy/sell uShare, vote, or claim unlocked tokens."
+  "I can't do that yet. I can help you stake/unstake, buy/sell uShare, vote, or claim vesting tokens."
 
 Action extraction rules:
-- STAKE / UNSTAKE: extract human amount (not wei) into "amount". If missing, keep actionType and add warning.
+- STAKE / UNSTAKE: extract human amount into "amount". If missing, keep actionType and add warning.
 - STAKE_ALL / UNSTAKE_ALL: no amount.
 - BUY_USHARE: needs "assetName" and "amount". If missing, keep BUY_USHARE and add warnings.
 - SELL_USHARE: needs "assetName". If missing, keep SELL_USHARE and add warnings.
 - VOTE: needs proposalId and vote. If missing, keep VOTE and add warnings.
-- CLAIM_UNLOCKED: no params.
+- CLAIM_VESTING: no params in JSON. (Backend needs Merkle proof + vesting data in request context to build tx.)
 
 Keep interpretation concise. Keep userMessage under 1–3 short sentences.
 `.trim();
 
-  const model = env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const model = env.OPENAI_MODEL ?? "gpt-4.1-mini";
 
   const reqBody: ChatCompletionCreateParamsNonStreaming = {
     model,
@@ -281,107 +277,190 @@ Keep interpretation concise. Keep userMessage under 1–3 short sentences.
     try {
       json = JSON.parse(raw);
     } catch {
-      // NEVER return "Command not yet available" for parse issues
       return helpMessage();
     }
 
     const parsed = PlannedSchema.safeParse(json);
-    if (!parsed.success) {
-      // NEVER return "Command not yet available" for schema issues
-      return helpMessage();
-    }
+    if (!parsed.success) return helpMessage();
 
     return parsed.data;
   } catch {
-    // Network/API errors: still return helpful QUESTION message
     return helpMessage();
   }
 }
 
 /* ----------------------------- TX Builder ----------------------------- */
 
-function buildTx(plan: Planned): { tx: TxPreview | null; warnings: string[] } {
+function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: string[] } {
   const warnings = [...(plan.warnings ?? [])];
 
-  const chainId = Number((process.env.CHAIN_ID ?? "84532").trim()); // Base Sepolia default
+  const chainId = Number(env.CHAIN_ID ?? 421614);
+
+  // Keep URANO decimals configurable without requiring env schema changes.
   const uranoDecimals = Number((process.env.URANO_DECIMALS ?? "18").trim());
 
-  const STAKING = asAddress(process.env.URANO_STAKING, "URANO_STAKING");
-  const GOV = asAddress(process.env.URANO_GOVERNANCE, "URANO_GOVERNANCE");
-  const MARKET = asAddress(process.env.USHARE_MARKET, "USHARE_MARKET");
-  const VESTING = asAddress(process.env.VESTING_ADDRESS, "VESTING_ADDRESS");
+  const STAKING = asAddress(env.URANO_STAKING, "URANO_STAKING");
+  const GOV = asAddress(env.URANO_GOVERNANCE, "URANO_GOVERNANCE");
+  const MARKET = asAddress(env.USHARE_MARKET, "USHARE_MARKET");
+  const VESTING = asAddress(env.VESTING_ADDRESS, "VESTING_ADDRESS");
 
   const value = 0n;
 
   switch (plan.actionType) {
     case "STAKE": {
-      if (!plan.amount) return { tx: null, warnings: [...warnings, "Missing amount."] };
+      if (!plan.amount) return { txs: [], warnings: [...warnings, "Missing amount."] };
       const amt = parseUnits(normalizeAmountString(plan.amount), uranoDecimals);
-      const data = encodeFunctionData({ abi: stakingAbi, functionName: "stake", args: [amt] });
-      return { tx: { chainId, to: STAKING, data, value: value.toString() }, warnings };
+
+      const data = encodeFunctionData({
+        abi: stakingAbi,
+        functionName: "stake",
+        args: [amt],
+      });
+
+      return { txs: [{ chainId, to: STAKING, data, value: value.toString() }], warnings };
     }
+
     case "UNSTAKE": {
-      if (!plan.amount) return { tx: null, warnings: [...warnings, "Missing amount."] };
+      if (!plan.amount) return { txs: [], warnings: [...warnings, "Missing amount."] };
       const amt = parseUnits(normalizeAmountString(plan.amount), uranoDecimals);
-      const data = encodeFunctionData({ abi: stakingAbi, functionName: "unstake", args: [amt] });
-      return { tx: { chainId, to: STAKING, data, value: value.toString() }, warnings };
+
+      const data = encodeFunctionData({
+        abi: stakingAbi,
+        functionName: "unstake",
+        args: [amt],
+      });
+
+      return { txs: [{ chainId, to: STAKING, data, value: value.toString() }], warnings };
     }
+
     case "STAKE_ALL": {
-      const data = encodeFunctionData({ abi: stakingAbi, functionName: "stakeAll" });
-      return { tx: { chainId, to: STAKING, data, value: value.toString() }, warnings };
+      const data = encodeFunctionData({
+        abi: stakingAbi,
+        functionName: "stakeAll",
+        args: [],
+      });
+
+      return { txs: [{ chainId, to: STAKING, data, value: value.toString() }], warnings };
     }
+
     case "UNSTAKE_ALL": {
-      const data = encodeFunctionData({ abi: stakingAbi, functionName: "unstakeAll" });
-      return { tx: { chainId, to: STAKING, data, value: value.toString() }, warnings };
+      const data = encodeFunctionData({
+        abi: stakingAbi,
+        functionName: "unstakeAll",
+        args: [],
+      });
+
+      return { txs: [{ chainId, to: STAKING, data, value: value.toString() }], warnings };
     }
+
     case "VOTE": {
       if (typeof plan.proposalId !== "number" || typeof plan.vote !== "boolean") {
-        return { tx: null, warnings: [...warnings, "Missing proposalId or vote choice."] };
+        return { txs: [], warnings: [...warnings, "Missing proposalId or vote choice."] };
       }
+
       const data = encodeFunctionData({
         abi: governanceAbi,
         functionName: "vote",
         args: [BigInt(plan.proposalId), plan.vote],
       });
-      return { tx: { chainId, to: GOV, data, value: value.toString() }, warnings };
+
+      return { txs: [{ chainId, to: GOV, data, value: value.toString() }], warnings };
     }
+
     case "BUY_USHARE": {
       if (!plan.assetName || !plan.amount) {
-        return { tx: null, warnings: [...warnings, "Missing uShare name or amount."] };
+        return { txs: [], warnings: [...warnings, "Missing uShare name or amount."] };
       }
-      warnings.push("Buying may require prior token approval before this tx can succeed.");
+
+      warnings.push("Buying may require token approval before this tx can succeed.");
+
+      // If your uShare token uses a different decimals value, adjust later.
       const amt = parseUnits(normalizeAmountString(plan.amount), 18);
+
       const data = encodeFunctionData({
         abi: uShareMarketAbi,
         functionName: "buyUshare",
         args: [plan.assetName, amt],
       });
-      return { tx: { chainId, to: MARKET, data, value: value.toString() }, warnings };
+
+      return { txs: [{ chainId, to: MARKET, data, value: value.toString() }], warnings };
     }
+
     case "SELL_USHARE": {
-      if (!plan.assetName) return { tx: null, warnings: [...warnings, "Missing uShare name."] };
+      if (!plan.assetName) return { txs: [], warnings: [...warnings, "Missing uShare name."] };
+
       const data = encodeFunctionData({
         abi: uShareMarketAbi,
         functionName: "sellUshare",
         args: [plan.assetName],
       });
-      return { tx: { chainId, to: MARKET, data, value: value.toString() }, warnings };
+
+      return { txs: [{ chainId, to: MARKET, data, value: value.toString() }], warnings };
     }
-    case "CLAIM_UNLOCKED": {
-      const data = encodeFunctionData({ abi: vestingAbi, functionName: "claimUnlocked" });
-      return { tx: { chainId, to: VESTING, data, value: value.toString() }, warnings };
+
+    case "CLAIM_VESTING": {
+      const account = body.context?.account;
+      const vest = body.context?.vesting;
+
+      if (!account) {
+        return { txs: [], warnings: [...warnings, "To claim vesting, I need your connected account (context.account)."] };
+      }
+
+      if (!vest) {
+        return {
+          txs: [],
+          warnings: [
+            ...warnings,
+            "To claim vesting, I need your vesting record + Merkle proof (context.vesting).",
+          ],
+        };
+      }
+
+      if (account.toLowerCase() !== vest.data.beneficiary.toLowerCase()) {
+        return {
+          txs: [],
+          warnings: [
+            ...warnings,
+            "Vesting claim blocked: connected account does not match the vesting beneficiary.",
+          ],
+        };
+      }
+
+      const dataTuple = {
+        beneficiary: vest.data.beneficiary,
+        totalAmount: BigInt(vest.data.totalAmount),
+        cliffInSeconds: BigInt(vest.data.cliffInSeconds),
+        vestingInSeconds: BigInt(vest.data.vestingInSeconds),
+        tgePercentage: BigInt(vest.data.tgePercentage),
+      };
+
+      const data = encodeFunctionData({
+        abi: vestingAbi,
+        functionName: "claim",
+        args: [dataTuple, vest.merkleProof],
+      });
+
+      return { txs: [{ chainId, to: VESTING, data, value: value.toString() }], warnings };
     }
+
     case "QUESTION":
     case "UNSUPPORTED":
     default:
-      return { tx: null, warnings };
+      return { txs: [], warnings };
   }
 }
 
-function makeOut(plan: Planned, tx: TxPreview | null, warnings: string[]): AssistantPlan {
+function makeOut(plan: Planned, txs: TxPreview[], warnings: string[]): AssistantPlan {
   const id = crypto.randomUUID();
-  const docsUrl = plan.docsUrl ?? (process.env.DOCS_URL || undefined);
-  const supportEmail = plan.supportEmail ?? (process.env.SUPPORT_EMAIL || undefined);
+
+  // Keep these optional without requiring env schema changes:
+  const fallbackDocsUrl = process.env.DOCS_URL || undefined;
+  const fallbackSupportEmail = process.env.SUPPORT_EMAIL || undefined;
+
+  const docsUrl = plan.docsUrl ?? fallbackDocsUrl;
+  const supportEmail = plan.supportEmail ?? fallbackSupportEmail;
+
+  const tx: TxPreview | null = txs.length > 0 ? txs[0]! : null;
 
   const base: Omit<AssistantPlan, "docsUrl" | "supportEmail"> = {
     id,
@@ -389,6 +468,7 @@ function makeOut(plan: Planned, tx: TxPreview | null, warnings: string[]): Assis
     interpretation: plan.interpretation,
     userMessage: plan.userMessage,
     warnings,
+    txs,
     tx,
   };
 
@@ -410,19 +490,19 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
     const plan = await planFromMessages(parsed.data);
 
-    let tx: TxPreview | null = null;
+    let txs: TxPreview[] = [];
     let warnings = [...(plan.warnings ?? [])];
 
     try {
-      const built = buildTx(plan);
-      tx = built.tx;
+      const built = buildTxs(plan, parsed.data);
+      txs = built.txs;
       warnings = built.warnings;
     } catch (e: unknown) {
       warnings = [...warnings, e instanceof Error ? e.message : "TX_BUILD_FAILED"];
-      tx = null;
+      txs = [];
     }
 
-    const out = makeOut(plan, tx, warnings);
+    const out = makeOut(plan, txs, warnings);
     return reply.send(out);
   });
 
@@ -434,7 +514,10 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const origin = req.headers.origin;
-    const allowList = (env.CORS_ORIGIN ?? "")
+
+    // Support both your new env key and your older env file key.
+    const allowListStr = env.CORS_ORIGIN ?? process.env.CORS_ORIGINS ?? "";
+    const allowList = allowListStr
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
@@ -489,23 +572,22 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
 
       const plan = await planFromMessages(parsed.data);
 
-      let tx: TxPreview | null = null;
+      let txs: TxPreview[] = [];
       let warnings = [...(plan.warnings ?? [])];
 
       try {
-        const built = buildTx(plan);
-        tx = built.tx;
+        const built = buildTxs(plan, parsed.data);
+        txs = built.txs;
         warnings = built.warnings;
       } catch (e: unknown) {
         warnings = [...warnings, e instanceof Error ? e.message : "TX_BUILD_FAILED"];
-        tx = null;
+        txs = [];
       }
 
-      const out = makeOut(plan, tx, warnings);
+      const out = makeOut(plan, txs, warnings);
 
       // Single source of truth for UI:
       reply.raw.write(sseEvent("plan", out));
-
       reply.raw.write(sseEvent("done", { ok: true }));
       cleanup();
     } catch (err: unknown) {
