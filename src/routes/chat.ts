@@ -33,21 +33,19 @@ function getEnvExtras(): EnvExtras {
     | undefined;
 
   const docsUrl = (e.DOCS_URL ?? process.env.DOCS_URL) as string | undefined;
-  const supportEmail = (e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL) as
-    | string
-    | undefined;
+  const supportEmail = (e.SUPPORT_EMAIL ?? process.env.SUPPORT_EMAIL) as string | undefined;
 
-  const out: { URANO_DECIMALS?: string | number; DOCS_URL?: string; SUPPORT_EMAIL?: string } =
-    {};
+  // IMPORTANT (exactOptionalPropertyTypes):
+  // Never assign `undefined` to optional props; only set when we have a real value.
+  const out: { URANO_DECIMALS?: string | number; DOCS_URL?: string; SUPPORT_EMAIL?: string } = {};
 
   if (uranoDecimals !== undefined) out.URANO_DECIMALS = uranoDecimals;
-  if (docsUrl !== undefined && docsUrl.trim() !== "") out.DOCS_URL = docsUrl;
-  if (supportEmail !== undefined && supportEmail.trim() !== "")
-    out.SUPPORT_EMAIL = supportEmail;
+
+  if (docsUrl && docsUrl.trim() !== "") out.DOCS_URL = docsUrl;
+  if (supportEmail && supportEmail.trim() !== "") out.SUPPORT_EMAIL = supportEmail;
 
   return out;
 }
-
 
 function toPositiveInt(v: unknown, fallback: number): number {
   const n =
@@ -74,8 +72,7 @@ const uShareFactoryAbi = extractAbi(UShareFactoryAbiJson);
 const vestingAbi = extractAbi(VestingAbiJson);
 const governanceAbi = extractAbi(GovernanceAbiJson);
 
-// NoUnusedLocals is not enabled in your tsconfig, so this is optional.
-// Keeping it anyway to make intent explicit for future work.
+// Keeping for future work; harmless with your tsconfig.
 void uranoTokenAbi;
 void uShareFactoryAbi;
 
@@ -131,12 +128,9 @@ const ChatBodySchema = z.object({
     .min(1)
     .max(50),
 
-  // Optional context for smarter tx planning
   context: z
     .object({
       account: AddressSchema.optional(),
-
-      // Merkle vesting claim tx generation
       vesting: z
         .object({
           data: VestingDataSchema,
@@ -167,7 +161,7 @@ const PlannedSchema = z.object({
   interpretation: z.string().min(1).max(300),
   userMessage: z.string().min(1).max(1200),
 
-  amount: z.string().optional(), // human amount (e.g. "100.5") for stake/buy
+  amount: z.string().optional(),
   assetName: z.string().optional(),
   proposalId: z.number().int().nonnegative().optional(),
   vote: z.boolean().optional(),
@@ -183,7 +177,7 @@ type TxPreview = Readonly<{
   chainId: number;
   to: Address;
   data: `0x${string}`;
-  value: string; // bigint string
+  value: string;
 }>;
 
 type AssistantPlan = Readonly<{
@@ -192,13 +186,8 @@ type AssistantPlan = Readonly<{
   interpretation: string;
   userMessage: string;
   warnings: string[];
-
-  // preferred (multi-step capable)
   txs: TxPreview[];
-
-  // backwards compatibility
   tx: TxPreview | null;
-
   docsUrl?: string;
   supportEmail?: string;
 }>;
@@ -307,7 +296,7 @@ Core rules:
 Action extraction rules:
 - STAKE / UNSTAKE: extract human amount into "amount". If missing, keep actionType and add warning.
 - STAKE_ALL / UNSTAKE_ALL: no amount.
-- BUY_USHARE: needs "assetName" and "amount". If missing, keep BUY_USHARE and add warnings.
+- BUY_USHARE: needs "amount". If assetName is missing, default it to "USDC".
 - SELL_USHARE: needs "assetName". If missing, keep SELL_USHARE and add warnings.
 - VOTE: needs proposalId and vote. If missing, keep VOTE and add warnings.
 - CLAIM_VESTING: no params in JSON. (Backend needs Merkle proof + vesting data in request context to build tx.)
@@ -424,9 +413,13 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
     }
 
     case "BUY_USHARE": {
-      if (!plan.assetName || !plan.amount) {
-        return { txs: [], warnings: [...warnings, "Missing uShare name or amount."] };
+      if (!plan.amount) {
+        return { txs: [], warnings: [...warnings, "Missing amount."] };
       }
+
+      // Your requirement: if assetName is missing, default it to USDC.
+      const assetName =
+        plan.assetName && plan.assetName.trim().length > 0 ? plan.assetName.trim() : "USDC";
 
       const amt = parseUnits(normalizeAmountString(plan.amount), 18);
 
@@ -441,7 +434,7 @@ function buildTxs(plan: Planned, body: ChatBody): { txs: TxPreview[]; warnings: 
       const buyData = encodeFunctionData({
         abi: uShareMarketAbi,
         functionName: "buyUshare",
-        args: [plan.assetName, amt],
+        args: [assetName, amt],
       });
 
       warnings.push(
@@ -523,8 +516,8 @@ function makeOut(plan: Planned, txs: TxPreview[], warnings: string[]): Assistant
 
   const extras = getEnvExtras();
 
-  const docsUrl = plan.docsUrl ?? extras.DOCS_URL ?? undefined;
-  const supportEmail = plan.supportEmail ?? extras.SUPPORT_EMAIL ?? undefined;
+  const docsUrl = plan.docsUrl ?? extras.DOCS_URL;
+  const supportEmail = plan.supportEmail ?? extras.SUPPORT_EMAIL;
 
   const tx: TxPreview | null = txs.length > 0 ? txs[0]! : null;
 
@@ -572,7 +565,6 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(out);
   });
 
-  // Stream (SSE): emits ready -> plan -> done
   app.post("/stream", async (req, reply) => {
     const parsed = ChatBodySchema.safeParse(req.body);
     if (!parsed.success) {
