@@ -261,6 +261,41 @@ function helpMessage(): Planned {
   };
 }
 
+function extractFirstNumber(text: string): string | null {
+  // Captures 120, 120.5, 120,5
+  const m = text.match(/(\d+(?:[.,]\d+)?)/);
+  if (!m) return null;
+  return m[1]!.replace(",", ".");
+}
+
+function coercePlanFromUserText(plan: Planned, last: string): Planned {
+  let out = plan;
+
+  const w = [...(out.warnings ?? [])];
+
+  // Default BUY asset
+  if (out.actionType === "BUY_USHARE") {
+    const asset =
+      out.assetName && out.assetName.trim().length > 0 ? out.assetName.trim() : "USDC";
+    if (asset !== out.assetName) out = { ...out, assetName: asset };
+  }
+
+  // Coerce amount for actions that require it
+  const needsAmount = out.actionType === "BUY_USHARE" || out.actionType === "STAKE" || out.actionType === "UNSTAKE";
+  if (needsAmount && (!out.amount || out.amount.trim() === "")) {
+    const inferred = extractFirstNumber(last);
+    if (inferred) {
+      out = { ...out, amount: inferred };
+    } else {
+      w.push("Missing amount. Example: 'buy 120 uShares with USDC'.");
+      out = { ...out, warnings: w };
+    }
+  }
+
+  return out;
+}
+
+
 /* ----------------------------- Planner (OpenAI -> JSON) ----------------------------- */
 
 async function planFromMessages(body: ChatBody): Promise<Planned> {
@@ -327,7 +362,7 @@ Keep interpretation concise. Keep userMessage under 1–3 short sentences.
     const parsed = PlannedSchema.safeParse(json);
     if (!parsed.success) return helpMessage();
 
-    return parsed.data;
+    return coercePlanFromUserText(parsed.data, last);
   } catch {
     return helpMessage();
   }
