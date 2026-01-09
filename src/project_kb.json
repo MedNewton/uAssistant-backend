@@ -1,0 +1,350 @@
+{
+  "source": "URANO ECOSYSTEM (knowledge) (1).txt",
+  "version": "2026-01-09",
+  "generatedFrom": "txt-extraction",
+  "sections": [
+    {
+      "id": "welcome-to-urano-ecosystem",
+      "title": "Welcome to Urano Ecosystem",
+      "summary": "Welcome to Urano Ecosystem, a full-stack platform dedicated to the tokenization of Real World Assets (RWA), including real estate, commodities, SMEs, art, and a broad range of alternative asset classes. By leveraging blockchain technology, Urano transforms real-world assets into programmable, fractional digital instruments, making them more accessible, transparent, and usable for a wide spectrum of participants. Urano enables issuers, investors, institutions, and DeFi users to tokenize, fractionalize, manage,…",
+      "bullets": [
+        "Arbitrum Everywhere The home layer of Urano Follow Us Join the Urano Venture on our social media channels and stay updated.",
+        "By bridging the gap between traditional finance and decentralized markets, Urano unlocks previously underserved and alternative asset classes across a multi-billion dollar market.",
+        "Start to Navigate the orbit of Real World Assets Tokenization Getting Started Understand the power of Tokenization  Discover the Ecosystem Explore."
+      ],
+      "body": "Welcome to Urano Ecosystem, a full-stack platform dedicated to the tokenization of\nReal World Assets (RWA), including real estate, commodities, SMEs, art, and a\nbroad range of alternative asset classes.\nBy leveraging blockchain technology, Urano transforms real-world assets into\nprogrammable, fractional digital instruments, making them more accessible,\ntransparent, and usable for a wide spectrum of participants.\nUrano enables issuers, investors, institutions, and DeFi users to tokenize,\nfractionalize, manage, trade, and govern asset-backed digital assets within a\ncompliant-by-design and fully composable on-chain environment.\nAt its core, the ecosystem integrates a regulatory-first corporate structure with a\nWeb3-native architecture and a multi-asset tokenization framework, delivering a\ngroundbreaking solution that enhances transparency, scalability, efficiency, and\ninclusiveness. By brid"
+    },
+    {
+      "id": "intro",
+      "title": "Intro",
+      "summary": "The traditional financial system continues to impose structural barriers that limit efficient access to investment opportunities for both individuals and businesses. High entry thresholds, fragmented regulatory environments, slow settlement cycles and reliance on centralized intermediaries contribute to a landscape that is often inaccessible, inefficient and lacking transparency. Urano was created to address these limitations not by replicating traditional infrastructures, but by introducing a…",
+      "bullets": [
+        "The traditional financial system continues to impose structural barriers that limit efficient access to investment opportunities for both individuals and businesses.",
+        "These segments of the real economy hold significant potential yet remain largely inaccessible due to liquidity constraints, regulatory complexity or operational friction."
+      ],
+      "body": "The traditional financial system continues to impose structural barriers that limit\nefficient access to investment opportunities for both individuals and businesses.\nHigh entry thresholds, fragmented regulatory environments, slow settlement cycles\nand reliance on centralized intermediaries contribute to a landscape that is often\ninaccessible, inefficient and lacking transparency.\nUrano was created to address these limitations not by replicating traditional\ninfrastructures, but by introducing a compliant-by-design, composable and usercentric framework for the digital representation and lifecycle management of RealWorld Assets (RWA). Through Urano, assets such as real estate, SMEs,\ncommodities, intellectual property, collectibles and art can be represented and\nmanaged on-chain in a transparent, programmable and efficient environment.\nWhile many RWA initiatives focus predominantly on tokeni"
+    },
+    {
+      "id": "the-legal-structure-of-urano",
+      "title": "The Legal Structure of Urano",
+      "summary": "The Urano Ecosystem has been carefully architected by a dedicated team of legal, financial and blockchain specialists to deliver a platform aligned with applicable EU regulatory frameworks, including MiCA and AML requirements. At the same time, it provides a comprehensive solution tailored for all stakeholders — including users, $URANO token holders, investors and partner institutions. This integration gives rise to a distinctive undertaking that merges the robustness of traditional asset frameworks with the…",
+      "bullets": [
+        "At the same time, it provides a comprehensive solution tailored for all stakeholders — including users, $URANO token holders, investors and partner institutions.",
+        "Company Information Company: URANO ECOSYSTEM Sp.",
+        "Registration Number (KRS): 0001028647 REGON: 524912675 VAT Number (NIP): 8762504246 Registered Office: ul."
+      ]
+    },
+    {
+      "id": "mica-compliance-and-permitted-activities",
+      "title": "MiCA Compliance and Permitted Activities",
+      "summary": "operates strictly within the scope of activities permitted under the MiCA regulatory framework and does not engage in services requiring additional authorization. All operations are conducted within the boundaries applicable to entities registered under the Polish VASP framework and transitioning toward the MiCA CASP regime. Permitted Activities Include: Urano Sp.",
+      "bullets": [
+        "creation, administration and lifecycle management of crypto-assets that fall",
+        "provision of technical interfaces enabling users to interact with digital",
+        "digital structuring and deployment of asset-linked representations through",
+        "technical distribution and placement tools, strictly within the boundaries",
+        "custodial and administrative tools designed to enhance user protection when",
+        "market-access enablement through compliant partnerships with third-party"
+      ],
+      "body": "Urano Sp. z o.o. operates strictly within the scope of activities permitted under the\nMiCA regulatory framework and does not engage in services requiring additional\nauthorization.\nAll operations are conducted within the boundaries applicable to entities registered\nunder the Polish VASP framework and transitioning toward the MiCA CASP regime.\nPermitted Activities Include:\nUrano Sp. z o.o. is authorized to perform only the following categories of activities:"
+    },
+    {
+      "id": "use-cases-of-tokenization",
+      "title": "Use Cases of Tokenization",
+      "summary": "Tokenization is reshaping the way individuals and institutions interact with Real World Assets (RWA), enabling new levels of accessibility, liquidity and operational efficiency. By converting tangible or financial assets into blockchain-based digital tokens, tokenization expands participation and modernizes markets across multiple industries. Below are some of the most relevant use cases observed in the broader tokenization landscape.",
+      "bullets": [
+        "Tokenization is reshaping the way individuals and institutions interact with Real World Assets (RWA), enabling new levels of accessibility, liquidity and operational efficiency.",
+        "By converting tangible or financial assets into blockchain-based digital tokens, tokenization expands participation and modernizes markets across multiple industries.",
+        "Below are some of the most relevant use cases observed in the broader tokenization landscape."
+      ]
+    },
+    {
+      "id": "how-ushares-are-structured",
+      "title": "How uShares Are Structured",
+      "summary": "A uShare is a factory ERC-20 token that represents a digital unit linked to the economic structure of a tokenized Real World Asset (RWA). Each uShare reflects a proportional allocation within the economic model defined for the asset’s dedicated economic framework, enabling transparent and auditable interaction with its lifecycle. Holding a uShare provides exposure to the economic performance associated with that specific opportunity.",
+      "bullets": [
+        "The user selects a tokenized RWA opportunity available on the Urano Platform.",
+        "After completing KYC verification, the user acquires uShares using supported",
+        "Before public availability, $URANO stakers receive a 48-hour priority window to",
+        "Once the purchase is executed, uShares are automatically transferred to the",
+        "The funds collected through uShare subscriptions are allocated to the dedicated"
+      ],
+      "body": "uShare Lifecycle\nThe lifecycle of a uShare follows a structured operational flow that provides\nproportional economic exposure to a tokenized Real World Asset (RWA), while\nensuring full transparency through on-chain records.\nAcquisition and Investment"
+    },
+    {
+      "id": "governance-and-decentralized-decision-making",
+      "title": "Governance and Decentralized Decision-Making",
+      "summary": "$URANO functions as a governance token, enabling eligible holders to participate in decision-making processes that shape the evolution of the Urano Ecosystem. Through the governance framework, holders can:  • Vote on platform updates, protocol enhancements and ecosystem parameters. • Propose and support new tokenization initiatives or feature integrations aligned with the ecosystem’s rules.",
+      "bullets": [
+        "Vote on platform updates, protocol enhancements and ecosystem",
+        "Propose and support new tokenization initiatives or feature integrations",
+        "Contribute to the strategic direction of the uApp, ensuring that development"
+      ]
+    },
+    {
+      "id": "ecosystem-rewards-pool",
+      "title": "Ecosystem Rewards Pool",
+      "summary": "Overview & Purpose The Ecosystem Rewards Pool is a dedicated incentive mechanism designed to encourage long-term engagement, active participation, and meaningful contribution within the Urano Ecosystem. It is not derived from automated revenue sharing, profit participation, or performance-based returns of tokenized assets. The pool is strategically funded by the ecosystem, periodically or on a discretionary basis, through allocations expressly designated for user incentives, community development, educational…",
+      "bullets": [
+        "It is not derived from automated revenue sharing, profit participation, or performance-based returns of tokenized assets.",
+        "Its purpose is to support a sustainable participation model, where users who contribute to the ecosystem’s development receive structured, transparent, and compliant rewards."
+      ]
+    },
+    {
+      "id": "staking-and-ecosystem-participation",
+      "title": "Staking and Ecosystem Participation",
+      "summary": "The staking mechanism enables $URANO holders to lock their tokens within the ecosystem and receive utility-based benefits associated with participation. This model is designed to:  • Provide staking allocations distributed according to predefined on-chain rules. • Encourage long-term engagement, supporting ecosystem stability and user alignment.",
+      "bullets": [
+        "Provide staking allocations distributed according to predefined on-chain rules.",
+        "Encourage long-term engagement, supporting ecosystem stability and user",
+        "Reinforce the functional utility of $URANO, linking participation with accessoriented incentives."
+      ]
+    },
+    {
+      "id": "pool",
+      "title": "Pool",
+      "summary": "$URANO is not a financial instrument and does not grant profit-sharing, passive income rights or claims over underlying assets. Staking allows users to lock $URANO in a dedicated smart contract and access both allocation-based staking rewards and functional utilities distributed from the predefined staking pool. Staked users benefit from: • priority access windows for selected uShare offerings • enhanced participation weighting within the Ecosystem Rewards Pool • governance voting power • reward distributions…",
+      "bullets": [
+        "priority access windows for selected uShare offerings",
+        "enhanced participation weighting within the Ecosystem Rewards Pool",
+        "governance voting power",
+        "reward distributions derived from the staking allocation",
+        "execute eligible operations (such as staking or governance voting)",
+        "retrieve user or platform information"
+      ],
+      "body": "4. Browse available opportunities and interact with the ecosystem — from\nacquiring uShares to participating in governance and staking features\nIs $URANO a utility token?\nYes, $URANO can be described as a “utility token” in a functional sense, but it is\nclassified as an “Other Crypto-Asset” for regulatory purposes under MiCA.\nThis distinction is intentional and reflects the different scope and legal weight of the\ndocuments involved."
+    },
+    {
+      "id": "urano",
+      "title": "$URANO",
+      "summary": "The utility and governance token of the ecosystem. $URANO grants access to specific features, governance participation and ecosystem-related functions, including prioritization in certain platform interactions. It does not represent ownership, revenue rights or financial claims over any underlying assets.",
+      "bullets": [
+        "The utility and governance token of the ecosystem.",
+        "$URANO grants access to specific features, governance participation and ecosystem-related functions, including prioritization in certain platform interactions.",
+        "uShares Digital representations linked to the economic structure of a tokenized Real World Asset opportunity.",
+        "uStation  The onboarding section dedicated to individuals and businesses seeking to structure eligible real-world assets in digital form.",
+        "uApp The uApp is the core interface of the Urano Ecosystem and the gateway through which structured Real World Asset (RWA) opportunities become accessible in digital form.",
+        "Every opportunity published on the uApp undergoes a dedicated review process carried out by Urano Sp."
+      ],
+      "body": "The utility and governance token of the ecosystem.\n$URANO grants access to specific features, governance participation and\necosystem-related functions, including prioritization in certain platform interactions.\nIt does not represent ownership, revenue rights or financial claims over any\nunderlying assets.\nuShares\nDigital representations linked to the economic structure of a tokenized Real World\nAsset opportunity. They enable transparent and compliant interaction with the\nasset’s lifecycle.\nuStation"
+    },
+    {
+      "id": "3-fractional-digital-representation",
+      "title": "3. Fractional Digital Representation",
+      "summary": "After approval, the asset is digitally structured through uShares, Urano’s programmable Factory ERC-20 representation. This process includes:  • defining the digital supply associated with the asset • encoding compliance logic and permissions • preparing lifecycle rules and metadata • deploying the representation on-chain Fractional digital structuring enables the division of the opportunity’s economic structure into multiple digital units. For example, a €1 million asset can be represented through 1,000…",
+      "bullets": [
+        "defining the digital supply associated with the asset",
+        "encoding compliance logic and permissions",
+        "preparing lifecycle rules and metadata",
+        "deploying the representation on-chain",
+        "view the asset’s documentation",
+        "review lifecycle details"
+      ],
+      "body": "Real World Asset Events and Value Distribution\nWhen a real-world asset associated with a digital representation generates a\nrecognized economic outcome — such as appreciation, liquidation, disposal, or the\nsuccessful completion of an underlying project — the corresponding value is\nhandled through a standardized process designed to ensure clarity, transparency\nand compliant on-chain execution."
+    },
+    {
+      "id": "key-considerations-risks-and-rewards",
+      "title": "Key Considerations: Risks and Rewards",
+      "summary": "Holding uShares provides exposure to the economic performance of a tokenized Real World Asset (RWA). This model offers meaningful opportunities but also involves risks that users should evaluate carefully before interacting with any structured digital representation. Benefits of uShares  • Access to economic participation in high-value real-world opportunities that traditionally required institutional entry barriers.",
+      "bullets": [
+        "Access to economic participation in high-value real-world opportunities that",
+        "On-chain transparency, reducing operational inefficiencies typical of off-chain",
+        "Potential value appreciation when the underlying asset’s economic reference",
+        "Global accessibility, enabling eligible users to engage with diverse asset classes"
+      ],
+      "body": "Holding uShares provides exposure to the economic performance of a tokenized\nReal World Asset (RWA).\nThis model offers meaningful opportunities but also involves risks that users should\nevaluate carefully before interacting with any structured digital representation.\nBenefits of uShares"
+    },
+    {
+      "id": "what-is-urano-ecosystem",
+      "title": "What is Urano Ecosystem?",
+      "summary": "Urano is a Web3-native infrastructure for the tokenization of Real World Assets (RWA). It provides a structured framework that transforms eligible assets—such as real estate, intellectual property, private credit, artwork, and business structures—into digital representations called uShares. Through a combination of legal structuring, on-chain technology, and modular product design, Urano enables secure, transparent, and accessible interaction with tokenized opportunities.",
+      "bullets": [
+        "browse tokenized RWA opportunities",
+        "purchase and manage uShares",
+        "monitor their portfolio and lifecycle updates",
+        "participate in governance",
+        "stake $URANO",
+        "interact with uAssistant"
+      ],
+      "body": "Urano is a Web3-native infrastructure for the tokenization of Real World Assets\n(RWA).\nIt provides a structured framework that transforms eligible assets—such as real\nestate, intellectual property, private credit, artwork, and business structures—into\ndigital representations called uShares.\nThrough a combination of legal structuring, on-chain technology, and modular\nproduct design, Urano enables secure, transparent, and accessible interaction with\ntokenized opportunities.\nWhat network is Urano built on?\nUrano is built entirely on Arbitrum, an Ethereum Layer 2 that combines Ethereumgrade security with low transaction costs, high scalability and full EVM\ncompatibility.\nThis provides fast and cost-efficient execution for tokenization workflows, staking,\ngovernance and secondary-market interactions, while ensuring full interoperability\nacross the Arbitrum ecosystem.\nWhat are uShares?\nuShares"
+    },
+    {
+      "id": "security-liquidity-reserve",
+      "title": "Security Liquidity Reserve",
+      "summary": "10%  Direct Initiatives Supporting the Urano Ecosystem (35%) Capital is allocated to initiatives that reinforce the operational development of the Urano Ecosystem, including:  • activities supporting new tokenization workflows and real-world asset structuring  • technological enhancements and infrastructure expansion • operational mechanisms designed to maintain stability and long-term sustainability for the ecosystem’s utilities and services  This allocation focuses on strengthening the ecosystem rather than…",
+      "bullets": [
+        "activities supporting new tokenization workflows and real-world asset",
+        "technological enhancements and infrastructure expansion",
+        "operational mechanisms designed to maintain stability and long-term",
+        "Decentralized Liquidity Operations: Participation in liquidity-providing activities",
+        "Yield Strategies: Engagement in staking mechanisms, lending frameworks and",
+        "Stablecoin Market Operations: Use of stablecoins within DeFi instruments"
+      ],
+      "body": "10%"
+    },
+    {
+      "id": "strategic-growth-and-market-positioning",
+      "title": "Strategic Growth and Market Positioning",
+      "summary": "$URANO is positioned at the center of the ongoing evolution in real-world asset tokenization, a sector widely projected to expand significantly in the coming years (e.g. - a 2022 Boston Consulting Group report estimates a potential tokenized market size of more than $16 trillion by 2030). As adoption accelerates, $URANO:  • Serves as a functional access layer within an ecosystem designed to support the migration of traditional value structures onto blockchain frameworks.",
+      "bullets": [
+        "Serves as a functional access layer within an ecosystem designed to support",
+        "Benefits from increased ecosystem activity, where greater use of tokenization",
+        "Operates within a legally compliant architecture, ensuring that all interactions",
+        "A functional link to real-world processes, where $URANO provides access,",
+        "A structured and compliant environment, developed to align with applicable",
+        "A deflationary supply model designed for ecosystem sustainability, aligning"
+      ],
+      "body": "$URANO is positioned at the center of the ongoing evolution in real-world asset\ntokenization, a sector widely projected to expand significantly in the coming years\n(e.g. - a 2022 Boston Consulting Group report estimates a potential tokenized\nmarket size of more than $16 trillion by 2030).\nAs adoption accelerates, $URANO:"
+    },
+    {
+      "id": "ux-considerations",
+      "title": "UX Considerations",
+      "summary": "The onboarding flow was optimized through iterative testing to balance regulatory requirements with a seamless user experience. Each step, from email confirmation to wallet connection and identity verification, was structured to minimize friction while maintaining operational integrity and compliance. User verification onboarding funnel The onboarding flow of the uApp is designed as a streamlined, fully automated process that ensures secure user registration, identity verification and wallet linkage, while…",
+      "bullets": [
+        "Thirdweb, for seamless and secure wallet connection,",
+        "Persona, for KYC/KYB and identity verification, including automated screening",
+        "Passed: the user is automatically advanced to the final registration stage.",
+        "Flagged: the user enters a manual review flow for compliance evaluation, during"
+      ],
+      "body": "The onboarding flow was optimized through iterative testing to balance regulatory\nrequirements with a seamless user experience.\nEach step, from email confirmation to wallet connection and identity verification,\nwas structured to minimize friction while maintaining operational integrity and\ncompliance.\nUser verification onboarding funnel\nThe onboarding flow of the uApp is designed as a streamlined, fully automated\nprocess that ensures secure user registration, identity verification and wallet\nlinkage, while maintaining full compliance with applicable regulatory requirements.\nThe funnel integrates two core technologies:"
+    },
+    {
+      "id": "governance-participation",
+      "title": "Governance Participation",
+      "summary": "Holding $URANO grants the ability to take part in governance processes, including voting on protocol improvements, ecosystem parameters and strategic initiatives. This ensures that community members can contribute to the long-term evolution of the ecosystem. Integration within a Regulated and Structured Environment  Urano Ecosystem operates within a compliant regulatory perimeter, integrating MiCA-aligned practices, AML/CFT standards and GDPR-compliant data handling.",
+      "bullets": [
+        "Holding $URANO grants the ability to take part in governance processes, including voting on protocol improvements, ecosystem parameters and strategic initiatives.",
+        "Governance is designed to ensure that the community has a direct influence on key aspects of the ecosystem, from platform upgrades to RWA tokenization approvals.",
+        "Holding $URANO grants the ability to take part in governance processes, including voting on protocol improvements, ecosystem parameters and strategic initiatives.",
+        "This ensures that community members can contribute to the long-term evolution of the ecosystem.",
+        "Tokenomics $URANO Tokenomics The Urano Token ($URANO) follows a structured tokenomics model designed to ensure long-term sustainability, ecosystem development, and growth.",
+        "With a total supply of 1,000,000,000 tokens, the allocation strategy balances ecosystem incentives, user participation mechanisms, and market stability."
+      ],
+      "body": "Holding $URANO grants the ability to take part in governance processes, including\nvoting on protocol improvements, ecosystem parameters and strategic initiatives.\nThis ensures that community members can contribute to the long-term evolution of\nthe ecosystem.\nIntegration within a Regulated and Structured Environment"
+    }
+  ],
+  "glossary": [
+    {
+      "term": "RWA (Real World Assets)",
+      "definition": "Tangible or off-chain assets (e.g., real estate, art, commodities, SMEs, IP) represented digitally on-chain via tokenization."
+    },
+    {
+      "term": "Tokenization",
+      "definition": "Process of converting real-world assets or economic structures into blockchain-based digital representations for transparent, programmable interaction."
+    },
+    {
+      "term": "uShare",
+      "definition": "A Factory ERC-20 token representing a fractional digital unit linked to the economic structure of a tokenized RWA opportunity."
+    },
+    {
+      "term": "uApp",
+      "definition": "Core Urano interface where verified users can browse opportunities, review documentation, and acquire/hold uShares via a Web3 wallet."
+    },
+    {
+      "term": "uStation",
+      "definition": "Onboarding module for asset originators to submit tokenization proposals, provide documentation, and complete compliance checks."
+    },
+    {
+      "term": "uAssistant",
+      "definition": "Urano’s AI agent that helps users navigate modules and execute supported on-chain actions via natural language."
+    },
+    {
+      "term": "$URANO",
+      "definition": "Urano’s utility and governance token used for governance participation, staking utilities, and priority access windows (not ownership/revenue rights)."
+    },
+    {
+      "term": "SPV (Special Purpose Vehicle)",
+      "definition": "Dedicated legal/operational structure used to hold or manage the underlying asset, providing segregation and traceability."
+    },
+    {
+      "term": "KYC",
+      "definition": "Know Your Customer identity verification for individuals, used to determine eligibility and meet AML/CFT obligations."
+    },
+    {
+      "term": "KYB",
+      "definition": "Know Your Business verification for companies/issuers, including identification of UBOs and relevant representatives."
+    },
+    {
+      "term": "UBO",
+      "definition": "Ultimate Beneficial Owner; individuals who ultimately own/control a business subject to KYB requirements."
+    },
+    {
+      "term": "AML/CFT",
+      "definition": "Anti-Money Laundering / Counter-Terrorist Financing compliance framework requiring screening, monitoring, and reporting."
+    },
+    {
+      "term": "MiCA",
+      "definition": "EU Markets in Crypto-Assets Regulation (EU 2023/1114), establishing rules for crypto-asset issuance and CASP authorization."
+    },
+    {
+      "term": "VASP",
+      "definition": "Virtual Asset Service Provider; a registration status under national regimes that may transition into MiCA CASP authorization."
+    },
+    {
+      "term": "CASP",
+      "definition": "Crypto-Asset Service Provider under MiCA; authorized entities can provide regulated crypto-asset services across the EU via passporting."
+    },
+    {
+      "term": "TGE",
+      "definition": "Token Generation Event; initial distribution moment when certain allocations unlock according to tokenomics schedules."
+    },
+    {
+      "term": "Cliff",
+      "definition": "Vesting parameter: period before any tokens unlock."
+    },
+    {
+      "term": "Vesting",
+      "definition": "Time-based token release schedule following TGE and/or cliff periods."
+    },
+    {
+      "term": "Ecosystem Rewards Pool",
+      "definition": "Participation-based incentive pool distributing rewards based on verifiable activity (not revenue-sharing)."
+    },
+    {
+      "term": "uPoints",
+      "definition": "Non-transferable, non-monetary scoring unit used for gamified participation progression and reward eligibility."
+    }
+  ],
+  "faq": [
+    {
+      "q": "What is Urano Ecosystem?",
+      "a": "Urano is a platform for compliant-by-design tokenization of Real World Assets (RWA), enabling assets such as real estate, commodities, SMEs, art, and IP to be represented on-chain as programmable, fractional digital instruments."
+    },
+    {
+      "q": "What are uShares?",
+      "a": "uShares are Factory ERC-20 digital representations linked to the economic structure of a specific tokenized opportunity. They provide proportional exposure to the opportunity’s economic reference model and support lifecycle transparency via on-chain notarization."
+    },
+    {
+      "q": "How does tokenization work in Urano?",
+      "a": "Assets are onboarded via internal origination or uStation, verified for legal/regulatory feasibility and documentation, structured through an SPV for segregation, then represented on-chain via uShares with compliance logic and lifecycle rules."
+    },
+    {
+      "q": "What is the uApp used for?",
+      "a": "The uApp is the main interface where eligible users can explore tokenized opportunities, review issuer information and supporting documents, complete KYC, acquire uShares via a Web3 wallet, and access modules such as staking and governance."
+    },
+    {
+      "q": "What is the role of $URANO?",
+      "a": "$URANO is the ecosystem’s utility and governance token. It is used for governance participation (typically via staking-based voting power), priority access windows for certain uShare offerings, and participation-oriented ecosystem features."
+    },
+    {
+      "q": "Is Urano compliant with EU regulation?",
+      "a": "Urano’s operating entity is structured to align with EU regulatory requirements such as MiCA and AML/CFT obligations, using identity controls and compliance enforcement within its workflows."
+    },
+    {
+      "q": "How does onboarding and identity verification work?",
+      "a": "The onboarding flow combines email confirmation and wallet connection (via Thirdweb) with identity verification handled by a third-party provider (Persona), including document checks, liveness/selfie steps, and AML/PEP screening."
+    },
+    {
+      "q": "How are real-world value events handled?",
+      "a": "When an asset produces an economic outcome off-chain (e.g., sale/liquidation), proceeds are collected by the SPV, converted to stablecoins (e.g., USDC), transferred on-chain, and made claimable by eligible uShare holders through dedicated contracts."
+    },
+    {
+      "q": "What is the Ecosystem Rewards Pool?",
+      "a": "It is an incentive mechanism for engagement-based rewards tied to verifiable participation metrics (e.g., platform activity, holding/staking $URANO). Rewards are not automatic; users claim them manually during distribution cycles."
+    },
+    {
+      "q": "How does governance work?",
+      "a": "Governance is described as on-chain and participation-driven, with voting power commonly linked to staked $URANO (e.g., 1 staked token = 1 vote). Proposals are discussed, then voted on, and can be executed on-chain when thresholds are met."
+    }
+  ]
+}

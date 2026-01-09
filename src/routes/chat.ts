@@ -22,6 +22,94 @@ import UShareFactoryAbiJson from "../abi/uShareFactory.json";
 import VestingAbiJson from "../abi/Vesting.json";
 import GovernanceAbiJson from "../abi/Governance.json";
 
+import fs from "node:fs";
+import path from "node:path";
+
+
+/* ----------------------------- Knowledge Pack (static JSON) ----------------------------- */
+
+type KnowledgePack = Readonly<{
+  source: string;
+  version: string;
+  generatedFrom?: string;
+  sections: ReadonlyArray<
+    Readonly<{
+      id: string;
+      title: string;
+      summary: string;
+      bullets: ReadonlyArray<string>;
+      body?: string;
+    }>
+  >;
+  glossary: ReadonlyArray<Readonly<{ term: string; definition: string }>>;
+  faq: ReadonlyArray<Readonly<{ q: string; a: string }>>;
+}>;
+
+const KB_REL_PATH = path.join("src", "project_kb.json");
+
+let KB_CACHE: KnowledgePack | null = null;
+
+function loadKnowledgePack(): KnowledgePack | null {
+  if (KB_CACHE) return KB_CACHE;
+
+  try {
+    const abs = path.resolve(process.cwd(), KB_REL_PATH);
+    const raw = fs.readFileSync(abs, "utf8");
+    const parsed = JSON.parse(raw) as KnowledgePack;
+
+    // Minimal shape validation (avoid runtime surprises)
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Array.isArray(parsed.sections) || !Array.isArray(parsed.glossary) || !Array.isArray(parsed.faq))
+      return null;
+
+    KB_CACHE = parsed;
+    return KB_CACHE;
+  } catch {
+    return null;
+  }
+}
+
+function formatKbForPrompt(kb: KnowledgePack): string {
+  // Keep it tight: short list of sections + glossary + FAQ.
+  const sections = kb.sections
+    .slice(0, 18)
+    .map((s) => {
+      const bullets = (s.bullets ?? []).slice(0, 6).map((b) => `- ${b}`).join("\n");
+      const body = s.body ? `\nKey details: ${s.body}` : "";
+      return `## ${s.title}\nSummary: ${s.summary}\n${bullets}${body}`;
+    })
+    .join("\n\n");
+
+  const glossary = kb.glossary
+    .slice(0, 30)
+    .map((g) => `- ${g.term}: ${g.definition}`)
+    .join("\n");
+
+  const faq = kb.faq
+    .slice(0, 20)
+    .map((f) => `Q: ${f.q}\nA: ${f.a}`)
+    .join("\n\n");
+
+  return `Knowledge Base (source: ${kb.source}, version: ${kb.version})
+
+SECTIONS:
+${sections}
+
+GLOSSARY:
+${glossary}
+
+FAQ:
+${faq}
+`;
+}
+
+function clampText(s: string, maxChars: number): string {
+  const t = s.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+
 /* ----------------------------- Env helpers (no env.ts changes required) ----------------------------- */
 
 type EnvExtras = Readonly<{
@@ -450,6 +538,65 @@ Keep interpretation concise. Keep userMessage under 1–3 short sentences.
   }
 }
 
+
+/* ----------------------------- QUESTION enrichment (KB -> richer answer) ----------------------------- */
+
+async function enrichQuestionAnswerFromKb(body: ChatBody, plan: Planned): Promise<Planned> {
+  if (plan.actionType !== "QUESTION") return plan;
+
+  const last = lastUserMessage(body);
+  // Don’t waste tokens on greetings/help
+  if (isSmallTalkOrHelp(last)) return plan;
+
+  const kb = loadKnowledgePack();
+  if (!kb) return plan;
+
+  const model = env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  const kbText = formatKbForPrompt(kb);
+
+  const system = `
+You are uAssistant for the Urano project.
+
+Answer the user's question using ONLY the Knowledge Base provided.
+If the KB does not contain the answer, say so explicitly and suggest what part of the docs to check next.
+
+Style rules:
+- Be complete and practical, but avoid unnecessary marketing.
+- Use short paragraphs and bullets when useful.
+- Do NOT fabricate numbers, addresses, or tokenomics.
+- If the question is about performing an on-chain action, keep the answer informational (the transaction plan will be handled separately).
+
+Return ONLY the answer text (no JSON).
+`.trim();
+
+  try {
+    const resp = await openai.chat.completions.create({
+      model,
+      temperature: 0.2,
+      max_tokens: 700,
+      messages: [
+        { role: "system", content: system },
+        { role: "system", content: kbText },
+        { role: "user", content: last },
+      ],
+    });
+
+    const answer = resp.choices?.[0]?.message?.content ?? "";
+    const safe = clampText(answer, 2000);
+
+    if (!safe) return plan;
+
+    return {
+      ...plan,
+      interpretation: plan.interpretation || "Project question answered using Knowledge Base",
+      userMessage: safe,
+      warnings: plan.warnings ?? [],
+    };
+  } catch {
+    return plan;
+  }
+}
+
 /* ----------------------------- TX Builder ----------------------------- */
 
 function buildTxs(
@@ -672,7 +819,9 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(500).send({ error: "CONFIG_ERROR", message: msg });
     }
 
-    const plan = await planFromMessages(parsed.data, offerings);
+    let plan = await planFromMessages(parsed.data, offerings);
+plan = await enrichQuestionAnswerFromKb(parsed.data, plan);
+
 
     let txs: TxPreview[] = [];
     let warnings = [...(plan.warnings ?? [])];
@@ -759,7 +908,9 @@ export const chatRoutes: FastifyPluginAsync = async (app) => {
     try {
       reply.raw.write(sseEvent("ready", { ok: true, id: reqId }));
 
-      const plan = await planFromMessages(parsed.data, offerings);
+      let plan = await planFromMessages(parsed.data, offerings);
+plan = await enrichQuestionAnswerFromKb(parsed.data, plan);
+
 
       let txs: TxPreview[] = [];
       let warnings = [...(plan.warnings ?? [])];
