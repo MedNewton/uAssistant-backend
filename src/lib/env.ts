@@ -38,7 +38,7 @@ const EnvSchema = z.object({
 
   // Chain / RPC (Arbitrum Sepolia default)
   RPC_URL: z.string().url(),
-  CHAIN_ID: z.coerce.number().int().positive().optional().default(421614),
+  CHAIN_ID: z.coerce.number().int().positive().optional().default(11155111),
 
   /**
    * Optional server key (ONLY if you later decide the backend should sign txs).
